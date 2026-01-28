@@ -1,0 +1,112 @@
+# OS Files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.sln.docstates
+
+# .NET
+backend/bin/
+backend/obj/
+backend/*.user
+backend/*.suo
+backend/*.sln.docstates
+backend/.vs/
+backend/packages/
+*.dll
+*.exe
+*.pdb
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.eslintcache
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.env
+
+# Build outputs
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Mobile Apps
+mobile-translator/build/
+mobile-translator/.dart_tool/
+mobile-translator/.flutter-plugins
+mobile-translator/.flutter-plugins-dependencies
+mobile-translator/.packages
+mobile-translator/.pub-cache/
+mobile-translator/.pub/
+mobile-translator/ios/Pods/
+mobile-translator/android/.gradle/
+mobile-translator/android/app/build/
+
+mobile-listener/build/
+mobile-listener/.dart_tool/
+mobile-listener/.flutter-plugins
+mobile-listener/.flutter-plugins-dependencies
+mobile-listener/.packages
+mobile-listener/.pub-cache/
+mobile-listener/.pub/
+mobile-listener/ios/Pods/
+mobile-listener/android/.gradle/
+mobile-listener/android/app/build/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Recordings (local storage)
+recordings/
+*.wav
+*.mp3
+*.opus
+
+# Docker
+*.log
+
+# Python (if STT worker uses Python)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Whisper models (if stored locally)
+*.pt
+*.bin
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Coverage reports
+coverage/
+*.coverage
+.nyc_output/
+
+# Test results
+test-results/
+*.trx
