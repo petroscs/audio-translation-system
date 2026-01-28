@@ -1,0 +1,52 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.sln.docstates
+
+# Build outputs
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/build/
+
+# Test files
+**/tests/
+**/test/
+**/*.test.js
+**/*.spec.js
+
+# Environment files
+.env
+.env.local
+*.env
+
+# Logs
+logs/
+*.log
+
+# Database files (will be created in container)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files
+docker-compose.yml
+Dockerfile
+.dockerignore
