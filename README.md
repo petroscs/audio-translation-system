@@ -8,12 +8,18 @@ audio-translation-system/
 ├── mediasoup-service/          # Node.js mediasoup SFU Service
 ├── stt-worker/                 # Speech-to-Text Worker (Whisper + FFmpeg)
 ├── recording-worker/           # Audio Recording Worker (FFmpeg)
-├── mobile-translator/          # Translator Mobile App (Flutter/React Native)
-├── mobile-listener/            # Listener Mobile App (Flutter/React Native)
-├── admin-dashboard/            # Web Admin Dashboard (React/Vue)
-├── database/                   # PostgreSQL Migrations & Scripts
-├── deployment/                 # Docker & Deployment Scripts
-└── docs/                       # Documentation
+├── mobile/                     # Mobile Apps (Flutter)
+│   ├── translator_app/         # Translator Mobile App
+│   └── listener_app/           # Listener Mobile App
+├── admin-dashboard/            # Web Admin Dashboard (React + Vite)
+├── database/                   # PostgreSQL schema & scripts
+├── deployment/                 # Docker & deployment config
+├── tests/                      # Integration, load, network, security, stress tests
+├── ARCHITECTURE.md             # Architecture documentation
+├── DEVELOPMENT_PLAN.md
+├── DOCKER_SETUP.md
+├── NEXT_STEPS.md
+└── *.ps1                       # GitHub/setup scripts (e.g. push-to-github.ps1)
 ```
 
 ---
@@ -22,30 +28,26 @@ audio-translation-system/
 
 ```
 backend/
-├── Api/
-│   ├── Controllers/           # REST API Controllers
-│   ├── Middleware/            # Custom Middleware
-│   └── Filters/               # Action Filters
-├── Services/
-│   ├── Auth/                  # Authentication Services
-│   ├── Events/                # Event Management Services
-│   ├── Channels/              # Channel Management Services
-│   ├── Sessions/              # Session Management Services
-│   ├── Recordings/            # Recording Services
-│   ├── Captions/              # Caption Services
-│   └── Mediasoup/             # mediasoup Integration Services
-├── Models/
-│   ├── Entities/              # Database Entities (EF Core)
-│   ├── DTOs/                  # Data Transfer Objects
-│   └── ViewModels/            # View Models
-├── Infrastructure/
-│   ├── Database/              # DbContext, Repositories
-│   ├── WebSocket/             # WebSocket/SignalR Handlers
-│   ├── Config/                # Configuration Classes
-│   └── Logging/               # Logging Infrastructure
-├── SignalR/                   # SignalR Hubs
-├── Data/                      # Data Access Layer
-└── Tests/                     # Unit & Integration Tests
+├── Backend.Api/               # Web API project
+│   ├── Controllers/           # REST API Controllers (Auth, Captions, Channels, Events, Recordings, Sessions, Users)
+│   ├── Hubs/                  # SignalR Hubs (SignalingHub)
+│   ├── Contracts/             # Request/Response DTOs (Auth, Captions, Channels, Events, Recordings, Sessions, Signaling, Users)
+│   ├── Configuration/         # App configuration (AdminUserSettings, CaptionBroadcaster)
+│   └── Seeding/               # Database seeder
+├── Backend.Services/          # Business logic
+│   ├── Services/              # Auth, Caption, Channel, Event, Mediasoup, Recording, Session, Signaling, SttWorker, User
+│   ├── Interfaces/           # Service interfaces
+│   └── Models/                # Service models (JWT, Mediasoup, etc.)
+├── Backend.Models/            # Shared domain models
+│   ├── Entities/              # EF Core entities (Caption, Channel, Consumer, Event, Producer, Recording, Session, Transport, User, etc.)
+│   └── Enums/                 # EventStatus, MediaKind, RecordingStatus, SessionRole, SessionStatus, UserRole, etc.
+├── Backend.Infrastructure/    # Data & cross-cutting
+│   └── Data/                  # AppDbContext, Migrations
+├── Backend.Tests/             # Unit & integration tests
+│   ├── Integration/           # API, Mediasoup, RecordingWorker, Signaling, SttWorker, Concurrency
+│   ├── Security/              # Auth, authorization, data & session security
+│   └── Helpers/               # TestServerFactory, TestDataBuilder, etc.
+└── Backend.sln
 ```
 
 ---
@@ -74,28 +76,34 @@ const transport = await connection.invoke("CreateTransport", {
 ```
 mediasoup-service/
 ├── src/
-│   ├── routers/               # Router Management
-│   ├── transports/            # Transport Management
-│   ├── producers/             # Producer Management
-│   ├── consumers/             # Consumer Management
-│   └── workers/               # Worker Management
-├── config/                    # Configuration Files
-└── tests/                     # Tests
+│   ├── index.js
+│   ├── server.js
+│   └── mediasoup/             # Router, transport, producer, consumer, worker modules
+│       ├── config.js
+│       ├── routers.js
+│       ├── transports.js
+│       ├── producers.js
+│       ├── consumers.js
+│       └── workers.js
+├── package.json
+└── package-lock.json
 ```
 
 ---
 
-## STT Worker (Node.js/Python)
+## STT Worker (Node.js)
 
 ```
 stt-worker/
 ├── src/
-│   ├── ffmpeg/               # FFmpeg RTP Decoder
-│   ├── whisper/               # Whisper Integration
-│   └── api/                   # API Endpoints
-├── models/                    # Data Models
-├── config/                    # Configuration
-└── tests/                     # Tests
+│   ├── index.js
+│   ├── config.js
+│   ├── mediasoup-consumer.js
+│   ├── rtp-receiver.js
+│   ├── whisper-processor.js
+│   └── caption-sender.js
+├── package.json
+└── package-lock.json
 ```
 
 ---
@@ -105,74 +113,56 @@ stt-worker/
 ```
 recording-worker/
 ├── src/
-│   ├── ffmpeg/               # FFmpeg Recording
-│   ├── storage/               # File Storage Management
-│   └── api/                   # API Endpoints
-├── config/                    # Configuration
-└── tests/                     # Tests
+│   ├── index.js
+│   ├── config.js
+│   ├── mediasoup-consumer.js
+│   ├── recording-sender.js
+│   └── rtp-to-file.js
+├── package.json
+└── package-lock.json
 ```
 
 ---
 
-## Mobile Translator App (Flutter/React Native)
+## Mobile Apps (Flutter)
+
+Translator and listener apps live under `mobile/` as separate Flutter projects.
 
 ```
-mobile-translator/
-├── lib/                       # Flutter: Source Code | React Native: src/
-│   ├── screens/               # App Screens
-│   ├── services/             # API & WebSocket Services
-│   ├── models/               # Data Models
-│   ├── widgets/              # Reusable Widgets/Components
-│   ├── utils/                # Utility Functions
-│   └── webrtc/               # WebRTC Wrapper
-├── test/                      # Tests
-└── assets/                    # Images, Fonts, etc.
-```
-
----
-
-## Mobile Listener App (Flutter/React Native)
-
-```
-mobile-listener/
-├── lib/                       # Flutter: Source Code | React Native: src/
-│   ├── screens/               # App Screens
-│   ├── services/             # API & WebSocket Services
-│   ├── models/               # Data Models
-│   ├── widgets/              # Reusable Widgets/Components
-│   ├── utils/                # Utility Functions
-│   └── webrtc/               # WebRTC Wrapper
-├── test/                      # Tests
-└── assets/                    # Images, Fonts, etc.
+mobile/
+├── translator_app/            # Translator Mobile App
+│   ├── lib/
+│   │   ├── app/               # App state
+│   │   ├── config/            # API config
+│   │   ├── models/            # Auth, channel, event, session, signaling
+│   │   ├── services/          # API client, auth, event, session
+│   │   ├── signaling/         # Signaling client
+│   │   ├── ui/                # Screens (login, event list, channel list, dashboard)
+│   │   └── webrtc/            # WebRTC service
+│   ├── test/
+│   ├── android/, ios/, web/, linux/, macos/, windows/
+│   └── pubspec.yaml
+└── listener_app/              # Listener Mobile App (similar structure)
 ```
 
 ---
 
-## Admin Dashboard (React/Vue)
+## Admin Dashboard (React + Vite)
 
 ```
 admin-dashboard/
 ├── src/
-│   ├── components/
-│   │   ├── common/           # Common Components
-│   │   ├── users/            # User Management Components
-│   │   ├── events/           # Event Management Components
-│   │   ├── channels/         # Channel Management Components
-│   │   ├── sessions/         # Session Management Components
-│   │   └── recordings/       # Recording Management Components
-│   ├── pages/
-│   │   ├── dashboard/        # Dashboard Page
-│   │   ├── users/            # User Management Page
-│   │   ├── events/           # Event Management Page
-│   │   ├── sessions/         # Session Monitoring Page
-│   │   ├── recordings/       # Recording Management Page
-│   │   └── settings/         # Settings Page
-│   ├── services/             # API Services
-│   ├── store/                # State Management (Redux/Vuex)
-│   ├── utils/                # Utility Functions
-│   └── hooks/                # Custom Hooks (React)
-├── public/                    # Static Assets
-└── tests/                     # Tests
+│   ├── api/                   # API client & endpoints (auth, channels, events, recordings, sessions, users)
+│   ├── auth/                  # AuthContext
+│   ├── components/            # Layout and shared components
+│   ├── pages/                 # Dashboard, Events, EventChannels, Login, Recordings, Sessions, Users
+│   ├── App.tsx
+│   ├── main.tsx
+│   └── index.css
+├── index.html
+├── vite.config.ts
+├── tsconfig.json
+└── package.json
 ```
 
 ---
@@ -181,9 +171,7 @@ admin-dashboard/
 
 ```
 database/
-├── migrations/                # PostgreSQL Migration Scripts
-├── seeds/                     # Seed Data Scripts
-└── scripts/                   # Utility Scripts
+└── schema.sql                 # PostgreSQL schema
 ```
 
 ---
@@ -193,34 +181,29 @@ database/
 ```
 deployment/
 ├── docker/
-│   ├── backend/              # Backend Dockerfile
-│   ├── mediasoup/            # mediasoup Dockerfile
-│   ├── stt-worker/           # STT Worker Dockerfile
+│   ├── backend/               # Backend Dockerfile
+│   ├── mediasoup/             # mediasoup Dockerfile
+│   ├── stt-worker/            # STT Worker Dockerfile
 │   ├── recording-worker/     # Recording Worker Dockerfile
-│   └── admin-dashboard/      # Admin Dashboard Dockerfile
-├── scripts/                   # Deployment Scripts
-│   ├── start.sh              # Startup Script
-│   ├── stop.sh               # Shutdown Script
-│   └── backup.sh             # Backup Script
-└── config/                    # Deployment Configuration
-    ├── docker-compose.yml     # Docker Compose Configuration
-    └── .env.example          # Environment Variables Template
+│   └── admin-dashboard/      # Admin Dashboard Dockerfile + nginx.conf
+├── docker-compose.yml
+├── .env.example
+├── .dockerignore
+└── README.md
 ```
 
 ---
 
-## Documentation
+## Documentation & tests
 
-```
-docs/
-├── api/                       # API Documentation
-├── architecture/              # Architecture Diagrams & Docs
-├── deployment/                # Deployment Guides
-└── user-guides/               # User Guides
-    ├── translator-guide.md
-    ├── listener-guide.md
-    └── admin-guide.md
-```
+- **Root .md files:** ARCHITECTURE.md, DATABASE_CHOICE.md, DEVELOPMENT_PLAN.md, DOCKER_SETUP.md, GITHUB_SETUP.md, NEXT_STEPS.md, PHASE_5_PLAN.md, SETUP_STATUS.md, STRUCTURE.md, WSL_INSTALLATION.md
+- **tests/**  
+  - `integration/` – e2e test scripts  
+  - `load/` – API, WebRTC, WebSocket load tests  
+  - `network/` – network testing guide  
+  - `security/` – security checklist, vulnerability assessment  
+  - `stress/` – stress testing guide  
+  - TEST_EXECUTION_GUIDE.md, PHASE_8_SUMMARY.md
 
 ---
 
