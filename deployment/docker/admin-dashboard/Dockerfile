@@ -2,6 +2,10 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
+# API URL for browser (build-time; e.g. http://localhost:5000)
+ARG VITE_API_URL=http://localhost:5000
+ENV VITE_API_URL=$VITE_API_URL
+
 # Copy package files
 COPY admin-dashboard/package*.json ./
 

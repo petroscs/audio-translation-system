@@ -1,0 +1,41 @@
+config:
+  target: "ws://localhost:5000"
+  phases:
+    - duration: 30
+      arrivalRate: 5
+      name: "Warm up"
+    - duration: 300
+      arrivalRate: 10
+      name: "Sustained load"
+    - duration: 30
+      arrivalRate: 0
+      name: "Cool down"
+  processor: "./websocket-processor.js"
+  payload:
+    path: "./test-data.json"
+    fields:
+      - "username"
+      - "password"
+
+scenarios:
+  - name: "Signaling connection"
+    weight: 100
+    engine: ws
+    flow:
+      - post:
+          url: "http://localhost:5000/api/auth/login"
+          json:
+            usernameOrEmail: "{{ username }}"
+            password: "{{ password }}"
+          capture:
+            - json: "$.accessToken"
+              as: "token"
+      - connect:
+          url: "ws://localhost:5000/ws/signaling?access_token={{ token }}"
+      - send: "ping"
+      - think: 5
+      - send:
+          json:
+            type: "ping"
+      - think: 10
+      - disconnect:

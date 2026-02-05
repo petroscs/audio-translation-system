@@ -1,13 +1,20 @@
 {
   "name": "recording-worker",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "directories": {
-    "test": "tests"
-  },
+  "description": "Records translator audio from mediasoup to disk",
+  "main": "src/index.js",
   "scripts": {
+    "start": "node src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "express": "^4.18.0",
+    "pino": "^8.16.0",
+    "pino-http": "^8.5.0"
+  },
+  "devDependencies": {
+    "pino-pretty": "^10.2.0"
   },
   "keywords": [],
   "author": "",

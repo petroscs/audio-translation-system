@@ -1,6 +1,96 @@
 @Backend.Api_HostAddress = http://localhost:5081
+@accessToken =
+@refreshToken =
 
-GET {{Backend.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+###
+# @name login
+POST {{Backend.Api_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "usernameOrEmail": "admin",
+  "password": "ChangeMe123!"
+}
+
+###
+@accessToken = {{login.response.body.accessToken}}
+@refreshToken = {{login.response.body.refreshToken}}
+
+###
+POST {{Backend.Api_HostAddress}}/api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+###
+POST {{Backend.Api_HostAddress}}/api/auth/logout
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+###
+# @name createEvent
+POST {{Backend.Api_HostAddress}}/api/events
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Demo Event",
+  "description": "Sample event for testing",
+  "startTime": "2026-02-01T10:00:00Z"
+}
+
+###
+GET {{Backend.Api_HostAddress}}/api/events
+Authorization: Bearer {{accessToken}}
+
+###
+@eventId = {{createEvent.response.body.id}}
+
+POST {{Backend.Api_HostAddress}}/api/events/{{eventId}}/start
+Authorization: Bearer {{accessToken}}
+
+###
+# @name createChannel
+POST {{Backend.Api_HostAddress}}/api/events/{{eventId}}/channels
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "English",
+  "languageCode": "en"
+}
+
+###
+@channelId = {{createChannel.response.body.id}}
+
+GET {{Backend.Api_HostAddress}}/api/events/{{eventId}}/channels
+Authorization: Bearer {{accessToken}}
+
+###
+# @name createSession
+POST {{Backend.Api_HostAddress}}/api/sessions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "eventId": "{{eventId}}",
+  "channelId": "{{channelId}}",
+  "role": "Translator"
+}
+
+###
+@sessionId = {{createSession.response.body.id}}
+
+GET {{Backend.Api_HostAddress}}/api/sessions/{{sessionId}}
+Authorization: Bearer {{accessToken}}
+
+###
+PUT {{Backend.Api_HostAddress}}/api/sessions/{{sessionId}}/end
+Authorization: Bearer {{accessToken}}
 
 ###

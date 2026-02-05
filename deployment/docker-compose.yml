@@ -14,11 +14,17 @@ services:
       - ASPNETCORE_URLS=http://+:5000;https://+:5001
       - ConnectionStrings__DefaultConnection=Data Source=/data/audio_translation.db
       - Mediasoup__ApiUrl=http://mediasoup:4000
+      - SttWorker__BaseUrl=http://stt-worker:5002
+      - SttWorker__ApiKey=${STT_WORKER_API_KEY:-stt-worker-secret}
+      - RecordingWorker__BaseUrl=http://recording-worker:5003
+      - RecordingWorker__ApiKey=${RECORDING_WORKER_API_KEY:-recording-worker-secret}
+      - Recordings__Path=/recordings
       - JWT__Secret=${JWT_SECRET:-your-secret-key-change-in-production}
       - JWT__Issuer=${JWT_ISSUER:-audio-translation-system}
       - JWT__Audience=${JWT_AUDIENCE:-audio-translation-clients}
     volumes:
       - db_data:/data
+      - recordings:/recordings
       - ./logs/backend:/app/logs
     depends_on:
       - mediasoup
@@ -57,6 +63,8 @@ services:
     environment:
       - MEDIASOUP_API_URL=http://mediasoup:4000
       - BACKEND_API_URL=http://backend:5000
+      - STT_WORKER_HOST=stt-worker
+      - STT_WORKER_API_KEY=${STT_WORKER_API_KEY:-stt-worker-secret}
       - WHISPER_MODEL=${WHISPER_MODEL:-base}
       - NODE_ENV=production
     networks:
@@ -77,6 +85,8 @@ services:
       - MEDIASOUP_API_URL=http://mediasoup:4000
       - BACKEND_API_URL=http://backend:5000
       - RECORDINGS_PATH=/recordings
+      - RECORDING_WORKER_HOST=recording-worker
+      - RECORDING_WORKER_API_KEY=${RECORDING_WORKER_API_KEY:-recording-worker-secret}
       - NODE_ENV=production
     volumes:
       - recordings:/recordings
@@ -91,11 +101,11 @@ services:
     build:
       context: ..
       dockerfile: deployment/docker/admin-dashboard/Dockerfile
+      args:
+        VITE_API_URL: ${API_URL:-http://localhost:5000}
     container_name: audio-translation-admin-dashboard
     ports:
       - "3000:3000"
-    environment:
-      - REACT_APP_API_URL=${API_URL:-http://localhost:5000}
     networks:
       - audio-translation-network
     depends_on:

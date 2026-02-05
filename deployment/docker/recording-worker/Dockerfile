@@ -11,8 +11,8 @@ WORKDIR /app
 # Copy package files
 COPY recording-worker/package*.json ./
 
-# Install Node.js dependencies
-RUN npm ci --only=production
+# Install Node.js dependencies (npm install works without package-lock.json)
+RUN npm install --omit=dev
 
 # Copy source code
 COPY recording-worker/ .
@@ -23,7 +23,6 @@ WORKDIR /app
 # Copy dependencies and source
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/src ./src
-COPY --from=build /app/config ./config
 COPY --from=build /app/package*.json ./
 
 # Create recordings directory

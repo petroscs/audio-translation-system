@@ -1,15 +1,23 @@
 {
   "name": "mediasoup-service",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Mediasoup SFU service",
+  "main": "src/index.js",
   "directories": {
     "test": "tests"
   },
   "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^4.22.1",
+    "mediasoup": "^3.19.15",
+    "morgan": "^1.10.1"
+  }
 }

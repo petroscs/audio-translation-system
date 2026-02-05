@@ -332,31 +332,33 @@ This document outlines a comprehensive development plan for building a private, 
 
 #### Tasks:
 1. **Project Setup**
-   - Initialize Flutter/React Native project
-   - Set up project structure
-   - Configure WebRTC libraries (flutter_webrtc or react-native-webrtc)
-   - Set up WebSocket client (SignalR client or native WebSocket)
+   - Initialize Flutter project for translator app
+   - Set up project structure (`lib/` modules for auth, events, sessions, signaling, webrtc, ui)
+   - Configure WebRTC library (`flutter_webrtc`)
+   - Set up SignalR client (`signalr_core` or equivalent)
+   - Add secure storage + HTTP client dependencies
 
 2. **Authentication UI**
    - Login screen
    - Token storage (secure storage)
    - Auto-login on app start
    - Logout functionality
+   - Token refresh on 401 via `/api/auth/refresh`
 
 3. **Event & Channel Selection**
    - List available events
    - Select event and channel
    - Display active sessions
    - Join as translator
+   - Persist selected `eventId`, `channelId`, `sessionId`
 
 4. **Audio Capture & WebRTC**
    - Request microphone permissions
    - Capture audio stream from device microphone
    - Create WebRTC peer connection
-   - Establish send transport
-   - Create audio producer
-   - Handle ICE candidates
-   - Handle transport connection
+   - SignalR flow: `CreateTransport` (send), `ConnectTransport`, `Produce`
+   - Handle ICE candidates and DTLS parameters from backend
+   - Map mediasoup transport/producers to local state
 
 5. **UI/UX**
    - Translator dashboard (event info, channel info, status)
@@ -378,23 +380,22 @@ This document outlines a comprehensive development plan for building a private, 
 
 #### Tasks:
 1. **Project Setup**
-   - Initialize Flutter/React Native project (separate from translator app)
-   - Set up WebRTC libraries
-   - Set up WebSocket client
+   - Initialize Flutter project (separate app or shared package)
+   - Set up WebRTC library (`flutter_webrtc`)
+   - Set up SignalR client (`signalr_core` or equivalent)
 
 2. **Authentication & Event Selection**
    - Login screen
    - List available events
    - Select event and channel
    - Join as listener
+   - Persist selected `eventId`, `channelId`, `sessionId`
 
 3. **Audio Reception & WebRTC**
    - Create WebRTC peer connection
-   - Establish receive transport
-   - Create audio consumer
+   - SignalR flow: `CreateTransport` (receive), `ConnectTransport`, `Consume`
    - Play received audio stream
-   - Handle ICE candidates
-   - Handle transport connection
+   - Handle ICE candidates and DTLS parameters from backend
 
 4. **Caption Display (Optional)**
    - WebSocket subscription for captions
@@ -426,6 +427,7 @@ This document outlines a comprehensive development plan for building a private, 
    - WebRTC connection failures
    - Graceful reconnection logic
    - User-friendly error messages
+   - Retry signaling steps on transient errors
 
 2. **Offline Handling**
    - Detect network connectivity
@@ -441,15 +443,41 @@ This document outlines a comprehensive development plan for building a private, 
 
 4. **Testing**
    - Unit tests for business logic
-   - Integration tests for WebRTC
-   - UI tests for critical flows
-   - Device testing (iOS, Android)
+   - Integration tests for signaling + WebRTC sequence (mock backend)
+   - UI tests for critical flows (login, join, start/stop, playback)
+   - Device testing (iOS, Android) on real hardware
 
 **Deliverables:**
 - ✅ Robust error handling
 - ✅ Offline support
 - ✅ Performance optimized
 - ✅ Test coverage adequate
+
+### Phase 4 Signaling & WebRTC Flow (Flutter)
+
+#### Translator (Send)
+1. Login -> obtain JWT
+2. REST: create session (`POST /api/sessions`)
+3. SignalR connect to `/ws/signaling?access_token={JWT}`
+4. `CreateTransport` with `direction: Send`
+5. `ConnectTransport` with DTLS parameters from local peer
+6. `Produce` with audio RTP parameters from `flutter_webrtc`
+
+#### Listener (Receive)
+1. Login -> obtain JWT
+2. REST: create session (`POST /api/sessions`)
+3. SignalR connect to `/ws/signaling?access_token={JWT}`
+4. `CreateTransport` with `direction: Receive`
+5. `ConnectTransport` with DTLS parameters from local peer
+6. `Consume` with producer ID -> attach remote audio track
+
+**Notes:**
+- On reconnect, re-create transports and producers/consumers.
+- Cache `eventId`, `channelId`, `sessionId` for resume flows.
+
+### Phase 4 Open Decisions
+- Separate translator/listener apps vs single app with role switch
+- State management choice (Provider vs Riverpod)
 
 ---
 

@@ -50,6 +50,25 @@ backend/
 
 ---
 
+## SignalR Signaling (Backend.Api)
+
+The signaling hub is available at `/ws/signaling` and expects `access_token` in the query string.
+
+Example (JavaScript SignalR client):
+```
+const connection = new signalR.HubConnectionBuilder()
+  .withUrl("http://localhost:5081/ws/signaling?access_token=JWT_TOKEN")
+  .build();
+
+await connection.start();
+const transport = await connection.invoke("CreateTransport", {
+  sessionId: "SESSION_GUID",
+  direction: "Send"
+});
+```
+
+---
+
 ## mediasoup Service (Node.js)
 
 ```
