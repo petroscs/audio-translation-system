@@ -10,7 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_secure_storage: any
-  flutter_webrtc: any
+  flutter_webrtc: ^1.0.0
   http: any
   provider: any
   signalr_core: any
