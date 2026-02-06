@@ -9,8 +9,8 @@ as a Translator session.
 - Start the backend (`Backend.Api`) locally.
 
 ## Configuration
-- Default API base URL: `http://10.0.2.2:5081`
-- Override with: `flutter run --dart-define=API_BASE_URL=http://<host>:5081`
+- Default API base URL: `http://10.0.2.2:5000`
+- Override with: `flutter run --dart-define=API_BASE_URL=http://<host>:5000`
 
 ## Notes
 - WebRTC signaling scaffolding is wired to the SignalR hub, but DTLS/RTP params

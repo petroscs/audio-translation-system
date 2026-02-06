@@ -1,0 +1,62 @@
+> cd audio-translation-system\mediasoup-service
+> npm start
+
+
+> cd audio-translation-system\recording-worker
+> npm start
+
+
+> cd audio-translation-system\stt-worker
+> npm start
+
+
+> cd audio-translation-system\backend
+> dotnet run --project Backend.Api
+
+
+> cd audio-translation-system\admin-dashboard
+> npm run dev
+
+
+
+
+
+Run mobile apps in emulator
+----------------------------
+
+> flutter doctor
+
+make sure all is ok
+
+
+Check available devices:
+> flutter devices
+
+
+Check available emulators:
+> flutter emulators
+
+
+Launch the Android emulator:
+> flutter emulators --launch Medium_Phone_API_36.1
+
+
+Install dependencies:
+
+> cd audio-translation-system\mobile\translator_app
+> flutter pub get
+
+> cd audio-translation-system\mobile\listener_app
+> flutter pub get
+
+Wait for the emulator to boot
+
+Check if the emulator is ready:
+> flutter devices
+
+
+> cd audio-translation-system\mobile\translator_app; flutter run -d android
+> flutter run --dart-define=API_BASE_URL=http://192.168.178.82:5000
+
+> cd audio-translation-system\mobile\listener_app; flutter run -d android
+> flutter run --dart-define=API_BASE_URL=http://192.168.178.82:5000

@@ -23,7 +23,7 @@ const webRtcTransportOptions = {
   listenIps: [{ ip: listenIp, announcedIp }],
   enableUdp: true,
   enableTcp: true,
-  preferUdp: true,
+  preferUdp: false, // Prefer TCP for Android emulator compatibility
   initialAvailableOutgoingBitrate: 1_000_000,
   minimumAvailableOutgoingBitrate: 600_000
 };
