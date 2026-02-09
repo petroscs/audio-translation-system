@@ -70,15 +70,16 @@ public sealed class SessionService : ISessionService
             return null;
         }
 
-        var activeSessionExists = await _dbContext.Sessions.AnyAsync(
-            session => session.UserId == userId
-                && session.ChannelId == channelId
-                && session.Status == SessionStatus.Active,
-            cancellationToken);
+        var existingActive = await _dbContext.Sessions
+            .FirstOrDefaultAsync(
+                session => session.UserId == userId
+                    && session.ChannelId == channelId
+                    && session.Status == SessionStatus.Active,
+                cancellationToken);
 
-        if (activeSessionExists)
+        if (existingActive is not null)
         {
-            return null;
+            return existingActive;
         }
 
         var entity = new Session

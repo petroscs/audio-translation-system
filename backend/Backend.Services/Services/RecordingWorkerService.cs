@@ -23,11 +23,12 @@ public sealed class RecordingWorkerService : IRecordingWorkerService
         }
     }
 
-    public async Task StartAsync(Guid sessionId, Guid channelId, Guid producerId, string mediasoupProducerId, CancellationToken cancellationToken = default)
+    public async Task StartAsync(Guid sessionId, Guid eventId, Guid channelId, Guid producerId, string mediasoupProducerId, CancellationToken cancellationToken = default)
     {
         var payload = new
         {
             sessionId,
+            eventId,
             channelId,
             producerId,
             mediasoupProducerId

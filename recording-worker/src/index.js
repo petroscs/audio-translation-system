@@ -6,9 +6,10 @@ const pinoHttp = require("pino-http");
 const path = require("path");
 const fs = require("fs");
 const config = require("./config");
-const { setupMediasoupConsumer } = require("./mediasoup-consumer");
+const { getRouterCapabilities, setupMediasoupConsumer } = require("./mediasoup-consumer");
 const { createRtpToFile, getNextRtpPort } = require("./rtp-to-file");
 const { sendRecordingComplete } = require("./recording-sender");
+const { buildSdpForReceiving } = require("./sdp-helper");
 
 const logger = pino({
   level: process.env.LOG_LEVEL || "info",
@@ -20,7 +21,7 @@ const logger = pino({
 
 const activePipelines = new Map();
 
-async function startPipeline(sessionId, channelId, producerId, mediasoupProducerId) {
+async function startPipeline(sessionId, eventId, channelId, producerId, mediasoupProducerId) {
   if (activePipelines.has(sessionId)) {
     logger.warn({ sessionId }, "Recording pipeline already active");
     return;
@@ -35,18 +36,37 @@ async function startPipeline(sessionId, channelId, producerId, mediasoupProducer
   const sessionDir = path.join(recordingsPath, String(sessionId));
   const outputPath = path.join(sessionDir, "recording.opus");
 
-  const rtpToFile = createRtpToFile(rtpPort, outputPath, logger);
-
+  let rtpToFile = null;
   try {
-    await setupMediasoupConsumer(
+    const { rtpParameters } = await setupMediasoupConsumer(
       sessionId,
+      eventId,
+      channelId,
       mediasoupProducerId,
       config.rtpHost,
       rtpPort,
       logger
     );
+
+    const audioCodec = rtpParameters?.codecs?.find((c) => c.mimeType?.toLowerCase().startsWith("audio/"));
+    logger.info(
+      {
+        rtpPort,
+        payloadType: audioCodec?.payloadType,
+        mimeType: audioCodec?.mimeType,
+        clockRate: audioCodec?.clockRate
+      },
+      "Consumer created, building SDP from consumer rtpParameters"
+    );
+
+    const sdpContent = buildSdpForReceiving(rtpPort, rtpParameters);
+    logger.info(
+      { rtpPort, sdpPreview: sdpContent.split("\r\n").slice(0, 7).join(" | ") },
+      "Starting FFmpeg with SDP matching consumer payload type"
+    );
+    rtpToFile = createRtpToFile(rtpPort, outputPath, logger, { sdpContent });
   } catch (err) {
-    rtpToFile.close();
+    if (rtpToFile) rtpToFile.close();
     throw err;
   }
 
@@ -68,12 +88,12 @@ async function stopPipeline(sessionId) {
   }
 
   pipeline.rtpToFile.close();
+  // Wait for FFmpeg to gracefully exit (flush buffers & finalize container)
+  await pipeline.rtpToFile.waitForExit(6000);
   activePipelines.delete(sessionId);
 
   const relativePath = pipeline.relativePath;
   const outputPath = pipeline.outputPath;
-
-  await new Promise((r) => setTimeout(r, 500));
 
   let durationSeconds = 0;
   try {
@@ -86,18 +106,27 @@ async function stopPipeline(sessionId) {
   const fileExists = fs.existsSync(outputPath);
   const stat = fileExists ? fs.statSync(outputPath) : null;
   const hasContent = stat && stat.size > 0;
+  const finalDuration = hasContent ? (durationSeconds ?? 0) : 0;
 
-  if (fileExists && hasContent && durationSeconds !== null) {
-    try {
-      await sendRecordingComplete(sessionId, relativePath, durationSeconds);
-      logger.info({ sessionId, relativePath, durationSeconds }, "Recording complete sent to backend");
-    } catch (err) {
-      logger.error({ err, sessionId }, "Failed to send recording complete to backend");
-    }
-  } else {
+  logger.info(
+    { sessionId, fileExists, fileSize: stat?.size ?? 0, durationSeconds: finalDuration },
+    "Recording stop: file check"
+  );
+
+  try {
+    await sendRecordingComplete(sessionId, relativePath, finalDuration);
+    logger.info(
+      { sessionId, relativePath, durationSeconds: finalDuration, hadContent: hasContent },
+      "Recording complete sent to backend"
+    );
+  } catch (err) {
+    logger.error({ err, sessionId }, "Failed to send recording complete to backend");
+  }
+
+  if (!fileExists || !hasContent) {
     logger.warn(
-      { sessionId, fileExists, hasContent, durationSeconds },
-      "Skipping POST complete: no file or zero length"
+      { sessionId, fileExists, hasContent },
+      "Recording had no audio data; backend notified with duration 0"
     );
   }
 
@@ -116,7 +145,7 @@ function createApp() {
 
   app.post("/recording/start", async (req, res) => {
     try {
-      const { sessionId, channelId, producerId, mediasoupProducerId } = req.body || {};
+      const { sessionId, eventId, channelId, producerId, mediasoupProducerId } = req.body || {};
 
       if (!sessionId || !mediasoupProducerId) {
         res.status(400).json({
@@ -125,8 +154,16 @@ function createApp() {
         return;
       }
 
+      if (!eventId || !channelId) {
+        res.status(400).json({
+          error: "eventId and channelId are required so the recording uses the same mediasoup router as the producer."
+        });
+        return;
+      }
+
       await startPipeline(
         sessionId,
+        eventId,
         channelId,
         producerId,
         mediasoupProducerId
@@ -167,7 +204,47 @@ function createApp() {
   return app;
 }
 
+const { spawn } = require("child_process");
+
+function validateFfmpeg(ffmpegPath, logger) {
+  return new Promise((resolve) => {
+    try {
+      const proc = spawn(ffmpegPath, ["-version"], {
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 5000
+      });
+      let stdout = "";
+      let stderr = "";
+      proc.stdout.on("data", (d) => { stdout += d.toString(); });
+      proc.stderr.on("data", (d) => { stderr += d.toString(); });
+      proc.on("error", (err) => {
+        logger.error({ err, ffmpegPath }, "FFmpeg validation failed - cannot execute");
+        resolve(false);
+      });
+      proc.on("exit", (code) => {
+        if (code === 0 || stdout.includes("ffmpeg version") || stderr.includes("ffmpeg version")) {
+          logger.info({ ffmpegPath, version: (stdout || stderr).split("\n")[0] }, "FFmpeg validated");
+          resolve(true);
+        } else {
+          logger.error({ code, ffmpegPath }, "FFmpeg validation failed - exit code");
+          resolve(false);
+        }
+      });
+    } catch (err) {
+      logger.error({ err, ffmpegPath }, "FFmpeg validation failed - spawn error");
+      resolve(false);
+    }
+  });
+}
+
 const app = createApp();
-app.listen(config.port, "0.0.0.0", () => {
+app.listen(config.port, "0.0.0.0", async () => {
   logger.info({ port: config.port }, "Recording worker listening");
+  const isValid = await validateFfmpeg(config.ffmpegPath, logger);
+  if (!isValid) {
+    logger.error(
+      { ffmpegPath: config.ffmpegPath },
+      "FFmpeg not working. Set FFMPEG_PATH to the full path to ffmpeg.exe. Find it with: Get-ChildItem -Path $env:LOCALAPPDATA -Filter ffmpeg.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName"
+    );
+  }
 });

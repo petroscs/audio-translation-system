@@ -4,6 +4,8 @@
 
 > cd audio-translation-system\recording-worker
 > npm start
+(Required for recording: if this is not running, broadcasts will not be recorded.)
+(Recording needs FFmpeg. If "where ffmpeg" returns nothing, the worker will search common install folders (WinGet Packages, Program Files, etc.). To set the path manually: find ffmpeg.exe with PowerShell: Get-ChildItem -Path $env:LOCALAPPDATA -Filter ffmpeg.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName. Then start with: $env:FFMPEG_PATH = "C:\path\to\ffmpeg.exe"; npm start)
 
 
 > cd audio-translation-system\stt-worker
@@ -12,6 +14,7 @@
 
 > cd audio-translation-system\backend
 > dotnet run --project Backend.Api
+(Backend and recording-worker both use the project-root "recordings" folder; run backend from the backend\ directory so downloads find the files.)
 
 
 > cd audio-translation-system\admin-dashboard
@@ -24,6 +27,32 @@
 Run mobile apps in emulator
 ----------------------------
 
+> cd audio-translation-system\mobile\translator_app; flutter run -d android
+> flutter run --dart-define=API_BASE_URL=http://192.168.178.82:5000
+
+> cd audio-translation-system\mobile\listener_app; flutter run -d android
+> flutter run --dart-define=API_BASE_URL=http://192.168.178.82:5000
+
+
+Run translator/listener app on Windows (desktop)
+----------------------------
+First start the backend so the app can reach the API:
+  > cd audio-translation-system\backend
+  > dotnet run --project Backend.Api
+
+Then run the app with the API URL pointing at this machine:
+  > cd audio-translation-system\mobile\translator_app
+  > flutter run -d windows --dart-define=API_BASE_URL=http://127.0.0.1:5000
+
+  > cd audio-translation-system\mobile\listener_app
+  > flutter run -d windows --dart-define=API_BASE_URL=http://127.0.0.1:5000
+
+If you see "The remote computer refused the network connection", the backend is not running or the URL/port is wrong.
+
+
+
+troubleshoot flutter
+-------------------
 > flutter doctor
 
 make sure all is ok
@@ -55,8 +84,3 @@ Check if the emulator is ready:
 > flutter devices
 
 
-> cd audio-translation-system\mobile\translator_app; flutter run -d android
-> flutter run --dart-define=API_BASE_URL=http://192.168.178.82:5000
-
-> cd audio-translation-system\mobile\listener_app; flutter run -d android
-> flutter run --dart-define=API_BASE_URL=http://192.168.178.82:5000

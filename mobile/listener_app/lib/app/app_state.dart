@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:signalr_core/signalr_core.dart';
 
 import '../models/channel.dart';
 import '../models/enums.dart';
@@ -41,6 +43,9 @@ class AppState extends ChangeNotifier {
   String? _consumerId;
   final List<Map<String, dynamic>> _captions = [];
   bool _captionsEnabled = true;
+  DateTime? _lastCaptionReceivedAt;
+  Timer? _audioLevelTimer;
+  double? _currentAudioLevel;
 
   bool get isInitializing => _isInitializing;
   bool get isBusy => _isBusy;
@@ -60,6 +65,16 @@ class AppState extends ChangeNotifier {
 
   AuthService get authService => _authService;
   SignalingClient get signalingClient => _signalingClient;
+
+  bool get isSignalingConnected => _signalingClient.state == HubConnectionState.connected;
+  bool get isReceivingCaptions {
+    if (_captions.isEmpty) return false;
+    // Consider receiving if we got captions in the last 5 seconds
+    if (_lastCaptionReceivedAt == null) return false;
+    return DateTime.now().difference(_lastCaptionReceivedAt!).inSeconds < 5;
+  }
+  double? get currentAudioLevel => _currentAudioLevel;
+  bool get isReceivingAudio => _currentAudioLevel != null && _currentAudioLevel! > 0.1;
 
   Future<void> initialize() async {
     await _authService.loadTokens();
@@ -132,42 +147,70 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> startListening({
-    required String dtlsParameters,
     required String producerId,
   }) async {
+    final trimmedProducerId = producerId.trim();
+    if (trimmedProducerId.isEmpty) {
+      _errorMessage = 'Please enter the Producer ID from the translator app (shown after Start Broadcast).';
+      notifyListeners();
+      return;
+    }
     await _runBusy(() async {
+      // 1. Create session if needed
       if (_activeSession == null) {
         await _startSessionInternal(SessionRole.listener);
       }
+
+      // 2. Connect signaling
       await _signalingClient.start();
 
+      // 3. Create a receive transport on the server
       final transport = await _signalingClient.createTransport(
         sessionId: _activeSession!.id,
         direction: TransportDirection.receive,
       );
       _activeTransportId = transport.transportId;
+      debugPrint('[AppState] Recv transport created: ${transport.transportId}');
 
-      await _signalingClient.connectTransport(
-        transportId: transport.transportId,
-        dtlsParameters: dtlsParameters,
-      );
-
+      // 4. Create a consumer first (we need the consumer's RTP params for SDP)
       final consumer = await _signalingClient.consume(
         transportId: transport.transportId,
-        producerId: producerId,
+        producerId: trimmedProducerId,
       );
       _consumerId = consumer.consumerId;
+      debugPrint('[AppState] Consumer created: ${consumer.consumerId}');
 
+      // 5. Create a real PeerConnection and negotiate with server's ICE/DTLS
+      final recvParams = await _webRtcService.connectRecvTransport(
+        iceParametersJson: transport.iceParameters,
+        iceCandidatesJson: transport.iceCandidates,
+        dtlsParametersJson: transport.dtlsParameters,
+        consumerRtpParametersJson: consumer.rtpParameters,
+      );
+      debugPrint('[AppState] PeerConnection negotiated for receiving');
+
+      // 6. Send real DTLS fingerprint to server
+      await _signalingClient.connectTransport(
+        transportId: transport.transportId,
+        dtlsParameters: recvParams.dtlsParameters,
+      );
+      debugPrint('[AppState] Transport connected with real DTLS params');
+
+      // 7. Join session for captions
       await _signalingClient.joinSession(_activeSession!.id);
 
       _signalingClient.removeCaptionHandler();
       _signalingClient.onCaption((caption) {
         _captions.add(caption);
+        _lastCaptionReceivedAt = DateTime.now();
         if (_captions.length > 50) {
           _captions.removeAt(0);
         }
         notifyListeners();
       });
+
+      // Start monitoring audio levels
+      _startAudioLevelMonitoring();
 
       _errorMessage = null;
     });
@@ -175,11 +218,41 @@ class AppState extends ChangeNotifier {
 
   Future<void> stopListening() async {
     await _runBusy(() async {
+      _stopAudioLevelMonitoring();
       _signalingClient.removeCaptionHandler();
       _captions.clear();
+      _lastCaptionReceivedAt = null;
       await _signalingClient.stop();
+      await _webRtcService.stopRemoteAudio();
       await _endSessionInternal();
     });
+  }
+
+  void _startAudioLevelMonitoring() {
+    _stopAudioLevelMonitoring();
+    _audioLevelTimer = Timer.periodic(const Duration(milliseconds: 200), (_) async {
+      if (_consumerId == null) {
+        _currentAudioLevel = null;
+        return;
+      }
+
+      try {
+        final level = await _webRtcService.getRemoteAudioLevel();
+        if (_currentAudioLevel != level) {
+          _currentAudioLevel = level;
+          notifyListeners();
+        }
+      } catch (e) {
+        // If we can't get audio level, fall back to caption-based detection
+        _currentAudioLevel = null;
+      }
+    });
+  }
+
+  void _stopAudioLevelMonitoring() {
+    _audioLevelTimer?.cancel();
+    _audioLevelTimer = null;
+    _currentAudioLevel = null;
   }
 
   Future<void> _startSessionInternal(SessionRole role) async {
@@ -201,15 +274,19 @@ class AppState extends ChangeNotifier {
     if (_activeSession == null) {
       return;
     }
-    _activeSession = await _sessionService.endSession(_activeSession!.id);
+    await _sessionService.endSession(_activeSession!.id);
+    _activeSession = null;
     _consumerId = null;
     _activeTransportId = null;
     _captions.clear();
+    _lastCaptionReceivedAt = null;
     _errorMessage = null;
   }
 
   void handleLifecycleChange(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    // Only stop on detached (app being destroyed).
+    // On desktop, 'inactive' fires on window focus loss — must NOT kill the connection.
+    if (state == AppLifecycleState.detached) {
       _signalingClient.stop();
     }
   }
@@ -220,8 +297,12 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       await action();
-    } catch (error) {
+    } catch (error, stackTrace) {
       _errorMessage = error.toString();
+      debugPrint('=== Listener app error ===');
+      debugPrint(error.toString());
+      debugPrint('Stack trace:\n$stackTrace');
+      debugPrint('==========================');
     } finally {
       _isBusy = false;
       notifyListeners();
@@ -230,8 +311,10 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _stopAudioLevelMonitoring();
     _signalingClient.stop();
     _webRtcService.stopAudioCapture();
+    _webRtcService.stopRemoteAudio();
     super.dispose();
   }
 }

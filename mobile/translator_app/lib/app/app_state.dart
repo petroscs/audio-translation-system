@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../models/channel.dart';
@@ -39,6 +41,7 @@ class AppState extends ChangeNotifier {
   Session? _activeSession;
   String? _activeTransportId;
   String? _producerId;
+  String? _mediasoupProducerId;
 
   bool get isInitializing => _isInitializing;
   bool get isBusy => _isBusy;
@@ -52,6 +55,7 @@ class AppState extends ChangeNotifier {
   Session? get activeSession => _activeSession;
   String? get activeTransportId => _activeTransportId;
   String? get producerId => _producerId;
+  String? get mediasoupProducerId => _mediasoupProducerId;
   WebRtcService get webRtcService => _webRtcService;
 
   AuthService get authService => _authService;
@@ -79,6 +83,7 @@ class AppState extends ChangeNotifier {
       _selectedChannel = null;
       _activeSession = null;
       _producerId = null;
+      _mediasoupProducerId = null;
       _activeTransportId = null;
       _errorMessage = null;
     });
@@ -122,34 +127,51 @@ class AppState extends ChangeNotifier {
     });
   }
 
-  Future<void> startBroadcast({
-    required String dtlsParameters,
-    required String rtpParameters,
-  }) async {
+  Future<void> startBroadcast() async {
     await _runBusy(() async {
+      // 1. Capture audio
       await _webRtcService.startAudioCapture();
+
+      // 2. Create session if needed
       if (_activeSession == null) {
         await _startSessionInternal(SessionRole.translator);
       }
+
+      // 3. Connect signaling
       await _signalingClient.start();
 
+      // 4. Create a send transport on the server
       final transport = await _signalingClient.createTransport(
         sessionId: _activeSession!.id,
         direction: TransportDirection.send,
       );
       _activeTransportId = transport.transportId;
+      debugPrint('[AppState] Transport created: ${transport.transportId}');
 
+      // 5. Create a real PeerConnection and negotiate with the server's ICE/DTLS
+      final sendParams = await _webRtcService.connectSendTransport(
+        iceParametersJson: transport.iceParameters,
+        iceCandidatesJson: transport.iceCandidates,
+        dtlsParametersJson: transport.dtlsParameters,
+      );
+      debugPrint('[AppState] PeerConnection negotiated — sending real DTLS + RTP params');
+
+      // 6. Send real DTLS fingerprint to server
       await _signalingClient.connectTransport(
         transportId: transport.transportId,
-        dtlsParameters: dtlsParameters,
+        dtlsParameters: sendParams.dtlsParameters,
       );
+      debugPrint('[AppState] Transport connected with real DTLS params');
 
+      // 7. Send real RTP parameters to server and create producer
       final producer = await _signalingClient.produce(
         transportId: transport.transportId,
         kind: MediaKind.audio,
-        rtpParameters: rtpParameters,
+        rtpParameters: sendParams.rtpParameters,
       );
       _producerId = producer.producerId;
+      _mediasoupProducerId = producer.mediasoupProducerId;
+      debugPrint('[AppState] Producer created: $_producerId (mediasoup: $_mediasoupProducerId)');
       _errorMessage = null;
     });
   }
@@ -166,7 +188,8 @@ class AppState extends ChangeNotifier {
     if (_activeSession == null) {
       return;
     }
-    _activeSession = await _sessionService.endSession(_activeSession!.id);
+    await _sessionService.endSession(_activeSession!.id);
+    _activeSession = null;
     _producerId = null;
     _activeTransportId = null;
     _errorMessage = null;
@@ -188,9 +211,36 @@ class AppState extends ChangeNotifier {
   }
 
   void handleLifecycleChange(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    // Only stop on detached (app being destroyed).
+    // On desktop, 'inactive' fires on window focus loss — must NOT kill the broadcast.
+    // On mobile, 'paused' fires on background — acceptable to keep running briefly.
+    if (state == AppLifecycleState.detached) {
       _signalingClient.stop();
       _webRtcService.stopAudioCapture();
+    }
+  }
+
+  /// Get producer stats to verify audio is being sent to mediasoup
+  /// Returns a map with stats including bytesSent, packetsSent, etc.
+  Future<Map<String, dynamic>?> getProducerStats() async {
+    if (_activeSession == null || _mediasoupProducerId == null) {
+      return null;
+    }
+
+    try {
+      final response = await _apiClient.get(
+        '/sessions/${_activeSession!.id}/producer-stats?mediasoupProducerId=$_mediasoupProducerId',
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        debugPrint('[AppState] Failed to get producer stats: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('[AppState] Error getting producer stats: $e');
+      return null;
     }
   }
 
@@ -200,8 +250,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       await action();
-    } catch (error) {
+    } catch (error, stackTrace) {
       _errorMessage = error.toString();
+      // Log full stack trace so it appears in console/terminal when running via `flutter run`
+      debugPrint('=== Translator app error ===');
+      debugPrint(error.toString());
+      debugPrint('Stack trace:\n$stackTrace');
+      debugPrint('==========================');
     } finally {
       _isBusy = false;
       notifyListeners();

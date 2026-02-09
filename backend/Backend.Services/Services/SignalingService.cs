@@ -39,7 +39,12 @@ public sealed class SignalingService : ISignalingService
 
         EnsureSessionActive(session, userId, isAdmin);
 
-        var transportResult = await _mediasoupService.CreateTransportAsync(sessionId, direction, cancellationToken);
+        var transportResult = await _mediasoupService.CreateTransportAsync(
+            sessionId,
+            session!.EventId,
+            session.ChannelId,
+            direction,
+            cancellationToken);
 
         var transport = new Transport
         {
@@ -59,6 +64,7 @@ public sealed class SignalingService : ISignalingService
             transport.Id,
             transport.MediasoupTransportId,
             transport.IceParameters,
+            transportResult.IceCandidates,
             transport.DtlsParameters);
     }
 
@@ -129,6 +135,7 @@ public sealed class SignalingService : ISignalingService
             {
                 await _sttWorkerService.StartAsync(
                     transport.SessionId,
+                    transport.Session.EventId,
                     transport.Session.ChannelId,
                     producer.Id,
                     producer.MediasoupProducerId,
@@ -146,6 +153,7 @@ public sealed class SignalingService : ISignalingService
             {
                 await _recordingWorkerService.StartAsync(
                     transport.SessionId,
+                    transport.Session.EventId,
                     transport.Session.ChannelId,
                     producer.Id,
                     producer.MediasoupProducerId,

@@ -60,6 +60,7 @@ public class RecordingWorkerIntegrationTests : IClassFixture<TestServerFactory>,
             Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
+            Guid.NewGuid(),
             "test-producer-id",
             CancellationToken.None);
 
@@ -147,6 +148,7 @@ public class RecordingWorkerIntegrationTests : IClassFixture<TestServerFactory>,
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await recordingWorkerService.StartAsync(
+                Guid.NewGuid(),
                 Guid.NewGuid(),
                 Guid.NewGuid(),
                 Guid.NewGuid(),

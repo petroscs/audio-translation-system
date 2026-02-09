@@ -19,7 +19,7 @@ const logger = pino({
 
 const activePipelines = new Map();
 
-async function startPipeline(sessionId, channelId, producerId, mediasoupProducerId) {
+async function startPipeline(sessionId, eventId, channelId, producerId, mediasoupProducerId) {
   if (activePipelines.has(sessionId)) {
     logger.warn({ sessionId }, "Pipeline already active");
     return;
@@ -55,6 +55,8 @@ async function startPipeline(sessionId, channelId, producerId, mediasoupProducer
   try {
     await setupMediasoupConsumer(
       sessionId,
+      eventId,
+      channelId,
       mediasoupProducerId,
       config.rtpHost,
       rtpPort,
@@ -101,7 +103,7 @@ function createApp() {
 
   app.post("/stt/start", async (req, res) => {
     try {
-      const { sessionId, channelId, producerId, mediasoupProducerId } = req.body || {};
+      const { sessionId, eventId, channelId, producerId, mediasoupProducerId } = req.body || {};
 
       if (!sessionId || !mediasoupProducerId) {
         res.status(400).json({
@@ -112,6 +114,7 @@ function createApp() {
 
       await startPipeline(
         sessionId,
+        eventId,
         channelId,
         producerId,
         mediasoupProducerId

@@ -21,7 +21,11 @@ class SessionService {
     });
 
     if (response.statusCode != 201) {
-      throw Exception('Failed to create session (${response.statusCode}).');
+      final errorBody = response.body.isNotEmpty ? ': ${response.body}' : '';
+      if (response.statusCode == 403) {
+        throw Exception('Access denied. Your account may not have the Listener role assigned.$errorBody');
+      }
+      throw Exception('Failed to create session (${response.statusCode})$errorBody');
     }
 
     return Session.fromJson(jsonDecode(response.body) as Map<String, dynamic>);

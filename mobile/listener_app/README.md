@@ -12,6 +12,13 @@ as a Listener session.
 - Default API base URL: `http://10.0.2.2:5000`
 - Override with: `flutter run --dart-define=API_BASE_URL=http://<host>:5000`
 
+## Logs
+- **When you run from a terminal** (`flutter run -d windows` or `flutter run -d <device>`):  
+  All `debugPrint` output and error stack traces appear in that same terminal.
+- **When you run from an IDE** (e.g. Run/Debug in VS Code or Cursor):  
+  Logs appear in the **Debug Console** or **Run** output panel.
+- To see the full stack trace for errors, run the app from a terminal so the logged trace is visible after you trigger the error.
+
 ## Notes
 - Consuming audio requires a mediasoup-compatible client to turn RTP parameters
   into a playable track.

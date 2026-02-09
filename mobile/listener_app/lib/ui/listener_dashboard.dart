@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app/app_state.dart';
+import 'audio_reception_indicator.dart';
 
 class ListenerDashboard extends StatefulWidget {
   const ListenerDashboard({super.key});
@@ -11,13 +12,11 @@ class ListenerDashboard extends StatefulWidget {
 }
 
 class _ListenerDashboardState extends State<ListenerDashboard> {
-  final _dtlsController = TextEditingController(text: '{"role":"auto"}');
   final _producerController = TextEditingController();
   final _captionScrollController = ScrollController();
 
   @override
   void dispose() {
-    _dtlsController.dispose();
     _producerController.dispose();
     _captionScrollController.dispose();
     super.dispose();
@@ -51,7 +50,7 @@ class _ListenerDashboardState extends State<ListenerDashboard> {
       body: Column(
         children: [
           Expanded(
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -68,28 +67,52 @@ class _ListenerDashboardState extends State<ListenerDashboard> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _dtlsController,
-                    decoration: const InputDecoration(
-                      labelText: 'DTLS Parameters (JSON)',
-                      helperText: 'Replace with client DTLS params from WebRTC stack.',
-                    ),
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 12),
                   if (appState.consumerId != null)
                     SelectableText('Consumer ID: ${appState.consumerId}'),
                   if (appState.errorMessage != null)
-                    Text(appState.errorMessage!, style: const TextStyle(color: Colors.red)),
-                  const Spacer(),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(appState.errorMessage!, style: const TextStyle(color: Colors.red)),
+                    ),
+                  if (appState.consumerId != null) ...[
+                    const SizedBox(height: 16),
+                    // Audio reception indicator
+                    AudioReceptionIndicator(
+                      isConnected: appState.isSignalingConnected,
+                      hasConsumer: appState.consumerId != null,
+                      audioLevel: appState.currentAudioLevel,
+                      height: 60,
+                      activeColor: Colors.green,
+                      inactiveColor: Colors.grey,
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: 120,
+                      child: Image.asset(
+                        'assets/listening.gif',
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.headphones, size: 48, color: Colors.blue),
+                              SizedBox(height: 8),
+                              Text('Listening', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: appState.isBusy
+                          onPressed: (appState.isBusy || appState.consumerId != null)
                               ? null
                               : () => appState.startListening(
-                                    dtlsParameters: _dtlsController.text.trim(),
                                     producerId: _producerController.text.trim(),
                                   ),
                           child: appState.isBusy
@@ -100,7 +123,9 @@ class _ListenerDashboardState extends State<ListenerDashboard> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: appState.isBusy ? null : () => appState.stopListening(),
+                          onPressed: (appState.isBusy || appState.consumerId == null)
+                              ? null
+                              : () => appState.stopListening(),
                           child: const Text('Stop'),
                         ),
                       ),

@@ -3,6 +3,7 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const config = require("./config");
 
 const RTP_PORT_START = 5020;
 const RTP_PORT_END = 5030;
@@ -19,10 +20,11 @@ function getNextRtpPort() {
  * @param {number} rtpPort - Port to listen for RTP
  * @param {string} outputPath - Full path to output file (e.g. /recordings/sessionId/recording.opus)
  * @param {object} logger - Pino logger
+ * @param {{ sdpContent?: string }} options - Optional. If sdpContent is set, FFmpeg uses SDP for RTP (required for Opus).
  * @returns {{ close: () => void, getDurationSeconds: () => Promise<number|null> }} - close() stops FFmpeg; getDurationSeconds() uses ffprobe after close
  */
-function createRtpToFile(rtpPort, outputPath, logger) {
-  const ffmpegPath = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
+function createRtpToFile(rtpPort, outputPath, logger, options = {}) {
+  const ffmpegPath = config.ffmpegPath;
   const dir = path.dirname(outputPath);
   try {
     fs.mkdirSync(dir, { recursive: true });
@@ -31,36 +33,62 @@ function createRtpToFile(rtpPort, outputPath, logger) {
     throw err;
   }
 
-  const args = [
-    "-hide_banner",
-    "-loglevel",
-    "warning",
-    "-f",
-    "rtp",
-    "-i",
-    `rtp://0.0.0.0:${rtpPort}`,
-    "-c:a",
-    "libopus",
-    "-b:a",
-    "64k",
-    "-vbr",
-    "on",
-    "-y",
-    outputPath
-  ];
+  let args;
+  if (options.sdpContent) {
+    const sdpPath = path.join(dir, "recording.sdp");
+    fs.writeFileSync(sdpPath, options.sdpContent, "utf8");
+    args = [
+      "-hide_banner",
+      "-loglevel",
+      "info",
+      "-protocol_whitelist",
+      "rtp,file,udp",
+      "-i",
+      sdpPath,
+      "-c:a",
+      "copy",
+      "-flush_packets",
+      "1",
+      "-y",
+      outputPath
+    ];
+  } else {
+    args = [
+      "-hide_banner",
+      "-loglevel",
+      "warning",
+      "-f",
+      "rtp",
+      "-i",
+      `rtp://0.0.0.0:${rtpPort}`,
+      "-c:a",
+      "libopus",
+      "-b:a",
+      "64k",
+      "-vbr",
+      "on",
+      "-y",
+      outputPath
+    ];
+  }
 
   const ffmpegProcess = spawn(ffmpegPath, args, {
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["pipe", "pipe", "pipe"]
   });
 
   let closed = false;
   let exitCode = null;
   let exitSignal = null;
+  let exited = false;
+  const exitPromise = new Promise((resolve) => {
+    ffmpegProcess.on("exit", () => { exited = true; resolve(); });
+    ffmpegProcess.on("error", () => { exited = true; resolve(); });
+  });
 
   ffmpegProcess.stderr.on("data", (data) => {
     const msg = data.toString().trim();
     if (msg && !closed) {
-      logger?.debug({ ffmpeg: msg }, "FFmpeg stderr");
+      logger?.info({ ffmpeg: msg }, "FFmpeg");
     }
   });
 
@@ -83,18 +111,34 @@ function createRtpToFile(rtpPort, outputPath, logger) {
   return {
     outputPath,
     close() {
+      if (closed) return;
       closed = true;
       try {
-        ffmpegProcess.kill("SIGTERM");
+        // Send 'q\n' to FFmpeg stdin for graceful shutdown (flushes buffers & finalizes container)
+        ffmpegProcess.stdin.write('q\n');
+        ffmpegProcess.stdin.end();
       } catch (e) {
-        /* ignore */
+        /* stdin may already be closed */
       }
+      // On Windows, also try SIGINT after a short delay (may trigger graceful shutdown)
+      setTimeout(() => {
+        try { if (!exited) ffmpegProcess.kill('SIGINT'); } catch (_) { /* ignore */ }
+      }, 1000);
+      // Fallback: force-kill after 5 seconds if FFmpeg hasn't exited
+      const killTimeout = setTimeout(() => {
+        try { if (!exited) ffmpegProcess.kill(); } catch (_) { /* ignore */ }
+      }, 5000);
+      ffmpegProcess.on('exit', () => clearTimeout(killTimeout));
+    },
+    async waitForExit(timeoutMs = 6000) {
+      if (exited) return;
+      await Promise.race([exitPromise, new Promise((r) => setTimeout(r, timeoutMs))]);
     },
     async getDurationSeconds() {
       if (!closed) {
         return null;
       }
-      const ffprobePath = process.platform === "win32" ? "ffprobe.exe" : "ffprobe";
+      const ffprobePath = config.ffprobePath;
       return new Promise((resolve) => {
         const probe = spawn(ffprobePath, [
           "-v",

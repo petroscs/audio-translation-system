@@ -3,7 +3,7 @@ const os = require("os");
 const cpuCount = os.cpus().length;
 
 const listenIp = process.env.MEDIASOUP_LISTEN_IP || "0.0.0.0";
-const announcedIp = process.env.MEDIASOUP_ANNOUNCED_IP || undefined;
+const announcedIp = process.env.MEDIASOUP_ANNOUNCED_IP || "127.0.0.1";
 
 const rtcMinPort = Number.parseInt(process.env.MEDIASOUP_RTC_MIN_PORT || "40000", 10);
 const rtcMaxPort = Number.parseInt(process.env.MEDIASOUP_RTC_MAX_PORT || "49999", 10);

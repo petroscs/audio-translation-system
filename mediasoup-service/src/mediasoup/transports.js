@@ -51,12 +51,46 @@ async function createPlainTransport({ router, routerId, sessionId }) {
   return transport;
 }
 
+function resolveIpToNumeric(ip) {
+  if (!ip || typeof ip !== 'string') return ip;
+  const trimmed = ip.trim().toLowerCase();
+  if (trimmed === 'localhost') return '127.0.0.1';
+  if (trimmed === '::1') return '127.0.0.1';
+  return ip;
+}
+
 async function connectPlainTransport(transportId, { ip, port }) {
+  const numericIp = resolveIpToNumeric(ip);
+  console.log(`[connectPlainTransport] Looking for transport: ${transportId}`);
+  console.log(`[connectPlainTransport] Available transports:`, Array.from(transportsById.keys()));
+  
   const transport = transportsById.get(transportId);
   if (!transport) {
-    throw new Error("Plain transport not found.");
+    throw new Error(`Plain transport not found. TransportId: ${transportId}`);
   }
-  await transport.connect({ ip, port });
+
+  console.log(`[connectPlainTransport] Transport found, connecting to ${numericIp}:${port}`);
+  
+  try {
+    await transport.connect({ ip: numericIp, port });
+    console.log(`[connectPlainTransport] Transport connected successfully`);
+    
+    // Wait a bit for tuple to be available
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    const tuple = {
+      localIp: transport.tuple?.localIp,
+      localPort: transport.tuple?.localPort,
+      remoteIp: transport.tuple?.remoteIp,
+      remotePort: transport.tuple?.remotePort
+    };
+    
+    console.log(`[connectPlainTransport] Tuple:`, tuple);
+    return tuple;
+  } catch (error) {
+    console.error(`[connectPlainTransport] Error connecting transport:`, error);
+    throw new Error(`Failed to connect plain transport: ${error.message}`);
+  }
 }
 
 function getTransportById(transportId) {

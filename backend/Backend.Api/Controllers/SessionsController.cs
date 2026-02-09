@@ -17,17 +17,20 @@ public sealed class SessionsController : ControllerBase
     private readonly IEventService _eventService;
     private readonly IChannelService _channelService;
     private readonly ICaptionService _captionService;
+    private readonly IMediasoupService _mediasoupService;
 
     public SessionsController(
         ISessionService sessionService,
         IEventService eventService,
         IChannelService channelService,
-        ICaptionService captionService)
+        ICaptionService captionService,
+        IMediasoupService mediasoupService)
     {
         _sessionService = sessionService;
         _eventService = eventService;
         _channelService = channelService;
         _captionService = captionService;
+        _mediasoupService = mediasoupService;
     }
 
     [HttpGet]
@@ -172,6 +175,39 @@ public sealed class SessionsController : ControllerBase
         var captions = await _captionService.GetSessionCaptionsAsync(id, cancellationToken);
         var response = captions.Select(c => new CaptionResponse(c.Id, c.Text, c.Timestamp, c.Confidence, c.CreatedAt)).ToList();
         return Ok(response);
+    }
+
+    [HttpGet("{id:guid}/producer-stats")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<Dictionary<string, object>>> GetProducerStats(Guid id, [FromQuery] string mediasoupProducerId, CancellationToken cancellationToken)
+    {
+        var session = await _sessionService.GetByIdAsync(id, cancellationToken);
+        if (session is null)
+        {
+            return NotFound();
+        }
+
+        if (!IsAdmin() && session.UserId != GetCurrentUserId())
+        {
+            return Forbid();
+        }
+
+        if (string.IsNullOrWhiteSpace(mediasoupProducerId))
+        {
+            return BadRequest("mediasoupProducerId is required.");
+        }
+
+        try
+        {
+            var stats = await _mediasoupService.GetProducerStatsAsync(mediasoupProducerId, cancellationToken);
+            return Ok(stats);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(ex.Message);
+        }
     }
 
     private Guid? GetCurrentUserId()

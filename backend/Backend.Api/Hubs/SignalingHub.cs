@@ -48,6 +48,7 @@ public sealed class SignalingHub : Hub
                 TransportId = result.TransportId,
                 MediasoupTransportId = result.MediasoupTransportId,
                 IceParameters = result.IceParameters,
+                IceCandidates = result.IceCandidates,
                 DtlsParameters = result.DtlsParameters
             };
         }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:signalr_core/signalr_core.dart';
 
 import '../config/api_config.dart';
@@ -29,7 +30,15 @@ class SignalingClient {
         .build();
 
     _connection = connection;
-    await connection.start();
+    try {
+      debugPrint('[SignalingClient] Connecting to ${ApiConfig.signalingUri()}...');
+      await connection.start();
+      debugPrint('[SignalingClient] Connected.');
+    } catch (e, st) {
+      debugPrint('[SignalingClient] connection.start() failed: $e');
+      debugPrint('[SignalingClient] $st');
+      rethrow;
+    }
   }
 
   Future<void> stop() async {
@@ -43,11 +52,19 @@ class SignalingClient {
     required String sessionId,
     required TransportDirection direction,
   }) async {
-    final result = await _invoke('CreateTransport', {
-      'SessionId': sessionId,
-      'Direction': direction.apiValue,
-    });
-    return TransportCreated.fromJson(result);
+    try {
+      debugPrint('[SignalingClient] CreateTransport...');
+      final result = await _invoke('CreateTransport', {
+        'SessionId': sessionId,
+        'Direction': direction.apiValue,
+      });
+      debugPrint('[SignalingClient] CreateTransport raw result keys: ${result.keys.toList()}');
+      return TransportCreated.fromJson(result);
+    } catch (e, st) {
+      debugPrint('[SignalingClient] createTransport failed: $e');
+      debugPrint('[SignalingClient] $st');
+      rethrow;
+    }
   }
 
   Future<void> connectTransport({
@@ -89,7 +106,13 @@ class SignalingClient {
       throw Exception('SignalR is not connected.');
     }
 
-    final result = await _connection!.invoke(method, args: [payload]);
+    debugPrint('[SignalingClient] _invoke $method...');
+    var result = await _connection!.invoke(method, args: [payload]);
+    debugPrint('[SignalingClient] _invoke $method result type: ${result.runtimeType}');
+    // Some SignalR implementations wrap the return value in a list.
+    if (result is List && result.isNotEmpty) {
+      result = result.first;
+    }
     if (result is Map<String, dynamic>) {
       return result;
     }
@@ -99,6 +122,6 @@ class SignalingClient {
     if (result == null) {
       return <String, dynamic>{};
     }
-    throw Exception('Unexpected response for $method.');
+    throw Exception('Unexpected response for $method: ${result.runtimeType}');
   }
 }

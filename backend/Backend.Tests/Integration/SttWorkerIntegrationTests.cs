@@ -63,6 +63,7 @@ public class SttWorkerIntegrationTests : IClassFixture<TestServerFactory>, IDisp
             Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
+            Guid.NewGuid(),
             "test-producer-id",
             CancellationToken.None);
 
@@ -148,6 +149,7 @@ public class SttWorkerIntegrationTests : IClassFixture<TestServerFactory>, IDisp
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await sttWorkerService.StartAsync(
+                Guid.NewGuid(),
                 Guid.NewGuid(),
                 Guid.NewGuid(),
                 Guid.NewGuid(),

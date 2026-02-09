@@ -66,6 +66,8 @@ public class MediasoupIntegrationTests : IClassFixture<TestServerFactory>, IDisp
         {
             await mediasoupService.CreateTransportAsync(
                 Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
                 TransportDirection.Send,
                 CancellationToken.None);
         });
@@ -80,6 +82,7 @@ public class MediasoupIntegrationTests : IClassFixture<TestServerFactory>, IDisp
         {
             mediasoupTransportId = "test-transport-id",
             iceParameters = "{\"username\":\"test\",\"password\":\"test\"}",
+            iceCandidates = "[]",
             dtlsParameters = "{\"fingerprints\":[],\"role\":\"auto\"}"
         };
 
@@ -109,6 +112,8 @@ public class MediasoupIntegrationTests : IClassFixture<TestServerFactory>, IDisp
 
         // Act
         var result = await mediasoupService.CreateTransportAsync(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
             Guid.NewGuid(),
             TransportDirection.Send,
             CancellationToken.None);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app/app_state.dart';
+import 'audio_level_indicator.dart';
 
 class TranslatorDashboard extends StatefulWidget {
   const TranslatorDashboard({super.key});
@@ -11,21 +12,10 @@ class TranslatorDashboard extends StatefulWidget {
 }
 
 class _TranslatorDashboardState extends State<TranslatorDashboard> {
-  final _dtlsController = TextEditingController(text: '{"role":"auto"}');
-  final _rtpController = TextEditingController(text: '{"codecs":[],"encodings":[]}');
-
-  @override
-  void dispose() {
-    _dtlsController.dispose();
-    _rtpController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final session = appState.activeSession;
-    final isCapturing = appState.webRtcService.localStream != null;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Translator Dashboard')),
@@ -37,41 +27,52 @@ class _TranslatorDashboardState extends State<TranslatorDashboard> {
             Text('Event: ${appState.selectedEvent?.name ?? '-'}'),
             Text('Channel: ${appState.selectedChannel?.name ?? '-'}'),
             Text('Session: ${session?.id ?? 'Not started'}'),
-            Text('Audio capture: ${isCapturing ? 'On' : 'Off'}'),
             const SizedBox(height: 16),
-            TextField(
-              controller: _dtlsController,
-              decoration: const InputDecoration(
-                labelText: 'DTLS Parameters (JSON)',
-                helperText: 'Replace with client DTLS params from WebRTC stack.',
-              ),
-              maxLines: 2,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _rtpController,
-              decoration: const InputDecoration(
-                labelText: 'RTP Parameters (JSON)',
-                helperText: 'Replace with mediasoup-compatible RTP params.',
-              ),
-              maxLines: 2,
+            // Audio level indicator
+            AudioLevelIndicator(
+              stream: appState.webRtcService.localStream,
+              webRtcService: appState.webRtcService,
+              height: 60,
+              activeColor: Colors.green,
+              inactiveColor: Colors.grey,
             ),
             const SizedBox(height: 12),
             if (appState.producerId != null)
               SelectableText('Producer ID: ${appState.producerId}'),
             if (appState.errorMessage != null)
-              Text(appState.errorMessage!, style: const TextStyle(color: Colors.red)),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(appState.errorMessage!, style: const TextStyle(color: Colors.red)),
+              ),
+            if (appState.producerId != null) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 120,
+                child: Image.asset(
+                  'assets/broadcasting.gif',
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.mic, size: 48, color: Colors.green),
+                        SizedBox(height: 8),
+                        Text('Live', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             const Spacer(),
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: appState.isBusy
+                    onPressed: (appState.isBusy || appState.producerId != null)
                         ? null
-                        : () => appState.startBroadcast(
-                              dtlsParameters: _dtlsController.text.trim(),
-                              rtpParameters: _rtpController.text.trim(),
-                            ),
+                        : () => appState.startBroadcast(),
                     child: appState.isBusy
                         ? const CircularProgressIndicator()
                         : const Text('Start Broadcast'),
@@ -80,7 +81,9 @@ class _TranslatorDashboardState extends State<TranslatorDashboard> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: appState.isBusy ? null : () => appState.stopBroadcast(),
+                    onPressed: (appState.isBusy || appState.producerId == null)
+                        ? null
+                        : () => appState.stopBroadcast(),
                     child: const Text('Stop'),
                   ),
                 ),

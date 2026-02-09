@@ -3,20 +3,23 @@ class TransportCreated {
     required this.transportId,
     required this.mediasoupTransportId,
     required this.iceParameters,
+    required this.iceCandidates,
     required this.dtlsParameters,
   });
 
   final String transportId;
   final String mediasoupTransportId;
   final String iceParameters;
+  final String iceCandidates;
   final String dtlsParameters;
 
   factory TransportCreated.fromJson(Map<String, dynamic> json) {
     return TransportCreated(
-      transportId: json['transportId'] as String,
-      mediasoupTransportId: json['mediasoupTransportId'] as String,
-      iceParameters: json['iceParameters'] as String,
-      dtlsParameters: json['dtlsParameters'] as String,
+      transportId: _string(json, 'transportId', 'TransportId'),
+      mediasoupTransportId: _string(json, 'mediasoupTransportId', 'MediasoupTransportId'),
+      iceParameters: _string(json, 'iceParameters', 'IceParameters'),
+      iceCandidates: _string(json, 'iceCandidates', 'IceCandidates'),
+      dtlsParameters: _string(json, 'dtlsParameters', 'DtlsParameters'),
     );
   }
 }
@@ -32,10 +35,21 @@ class ProducerCreated {
 
   factory ProducerCreated.fromJson(Map<String, dynamic> json) {
     return ProducerCreated(
-      producerId: json['producerId'] as String,
-      mediasoupProducerId: json['mediasoupProducerId'] as String,
+      producerId: _string(json, 'producerId', 'ProducerId'),
+      mediasoupProducerId: _string(json, 'mediasoupProducerId', 'MediasoupProducerId'),
     );
   }
+}
+
+String _string(Map<String, dynamic> json, String camelKey, String pascalKey) {
+  final value = json[camelKey] ?? json[pascalKey];
+  if (value == null) {
+    throw FormatException(
+      'Missing key "$camelKey" or "$pascalKey" in SignalR response. Keys: ${json.keys.join(", ")}',
+    );
+  }
+  if (value is String) return value;
+  return value.toString();
 }
 
 class ConsumerCreated {
@@ -53,10 +67,10 @@ class ConsumerCreated {
 
   factory ConsumerCreated.fromJson(Map<String, dynamic> json) {
     return ConsumerCreated(
-      consumerId: json['consumerId'] as String,
-      mediasoupConsumerId: json['mediasoupConsumerId'] as String,
-      mediasoupProducerId: json['mediasoupProducerId'] as String,
-      rtpParameters: json['rtpParameters'] as String,
+      consumerId: _string(json, 'consumerId', 'ConsumerId'),
+      mediasoupConsumerId: _string(json, 'mediasoupConsumerId', 'MediasoupConsumerId'),
+      mediasoupProducerId: _string(json, 'mediasoupProducerId', 'MediasoupProducerId'),
+      rtpParameters: _string(json, 'rtpParameters', 'RtpParameters'),
     );
   }
 }

@@ -26,12 +26,16 @@ public sealed class MediasoupService : IMediasoupService
 
     public async Task<MediasoupTransportResult> CreateTransportAsync(
         Guid sessionId,
+        Guid eventId,
+        Guid channelId,
         TransportDirection direction,
         CancellationToken cancellationToken)
     {
         var payload = new
         {
             sessionId,
+            eventId,
+            channelId,
             direction = direction.ToString().ToLowerInvariant()
         };
 
@@ -98,6 +102,50 @@ public sealed class MediasoupService : IMediasoupService
             cancellationToken);
 
         return result;
+    }
+
+    public async Task<Dictionary<string, object>> GetProducerStatsAsync(
+        string mediasoupProducerId,
+        CancellationToken cancellationToken)
+    {
+        var result = await GetWithRetryAsync<Dictionary<string, object>>(
+            $"mediasoup/producer/{mediasoupProducerId}/stats",
+            cancellationToken);
+
+        return result;
+    }
+
+    private async Task<T> GetWithRetryAsync<T>(string path, CancellationToken cancellationToken)
+    {
+        const int maxAttempts = 3;
+        for (var attempt = 1; attempt <= maxAttempts; attempt += 1)
+        {
+            try
+            {
+                using var response = await _httpClient.GetAsync(path, cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                    throw new InvalidOperationException(
+                        $"Mediasoup request failed ({response.StatusCode}): {errorBody}");
+                }
+
+                var result = await response.Content.ReadFromJsonAsync<T>(_serializerOptions, cancellationToken);
+                if (result is null)
+                {
+                    throw new InvalidOperationException("Mediasoup response was empty.");
+                }
+
+                return result;
+            }
+            catch (Exception ex) when (attempt < maxAttempts
+                && (ex is HttpRequestException or TaskCanceledException))
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(200 * attempt), cancellationToken);
+            }
+        }
+
+        throw new InvalidOperationException("Mediasoup request failed after retries.");
     }
 
     private async Task<T> PostWithRetryAsync<T>(string path, object payload, CancellationToken cancellationToken)

@@ -3,11 +3,13 @@
 const axios = require("axios");
 const config = require("./config");
 
-async function setupMediasoupConsumer(sessionId, mediasoupProducerId, rtpHost, rtpPort, logger) {
+async function setupMediasoupConsumer(sessionId, eventId, channelId, mediasoupProducerId, rtpHost, rtpPort, logger) {
   const baseUrl = config.mediasoupApiUrl;
 
   const createTransportRes = await axios.post(`${baseUrl}/mediasoup/plain-transport/create`, {
-    sessionId
+    sessionId,
+    eventId,
+    channelId
   });
 
   const transportId = createTransportRes.data.mediasoupTransportId;
