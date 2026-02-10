@@ -23,7 +23,7 @@ graph TB
             TA[Mobile Translator App<br/>Flutter]
             LA1[Mobile Listener App<br/>Flutter]
             LA2[Mobile Listener App<br/>Flutter]
-            AD[Admin Dashboard<br/>React/Vue]
+            AD[Admin Dashboard<br/>React + Vite]
         end
         
         subgraph "Backend Services"
@@ -172,36 +172,35 @@ sequenceDiagram
 
 ## Service Interaction Flow - STT/Captions
 
-This diagram shows how audio is processed for speech-to-text and captions are delivered to listeners.
+This diagram shows how audio is processed for speech-to-text and captions are delivered to listeners. The backend starts the STT worker when the translator creates a producer (starts streaming). The STT worker connects to mediasoup via **Plain RTP transport** (plain-transport/create, plain-transport/connect, then consumer/create).
 
 ```mermaid
 sequenceDiagram
     participant TA as Translator App
+    participant BE as Backend API
     participant MS as mediasoup Service
     participant STT as STT Worker
-    participant BE as Backend API
     participant LA1 as Listener App 1
     participant LA2 as Listener App 2
     
-    Note over TA,STT: STT Worker Setup
-    STT->>BE: Register for session (HTTP API)
-    BE->>STT: Session details, Producer ID
-    
-    STT->>MS: Connect as consumer (HTTP API)
+    Note over TA,STT: STT Worker Setup (triggered when translator produces)
+    BE->>STT: POST /stt/start (sessionId, eventId, channelId, producerId, mediasoupProducerId)
+    STT->>MS: POST /mediasoup/plain-transport/create, plain-transport/connect
+    STT->>MS: POST /mediasoup/consumer/create
     MS-->>STT: Consumer ID, RTP parameters
     
     Note over TA,STT: Audio Processing Pipeline
     TA->>MS: RTP Audio Stream
-    MS->>STT: RTP Audio Stream (consumer)
+    MS->>STT: RTP Audio Stream (Plain RTP to worker)
     
     loop Continuous Processing
         STT->>STT: FFmpeg: RTP → PCM (16kHz, 16-bit, mono)
         STT->>STT: Whisper: PCM → Text + Timestamps
         STT->>STT: Format captions (punctuation, capitalization)
-        STT->>BE: POST /api/captions (caption data)
+        STT->>BE: POST /api/captions (caption data, X-STT-Worker-Key)
         BE->>BE: Store caption in SQLite
-        BE->>LA1: WebSocket: caption message
-        BE->>LA2: WebSocket: caption message
+        BE->>LA1: WebSocket (SignalR): Caption message
+        BE->>LA2: WebSocket (SignalR): Caption message
         LA1->>LA1: Display caption overlay
         LA2->>LA2: Display caption overlay
     end
@@ -211,44 +210,43 @@ sequenceDiagram
 
 ## Service Interaction Flow - Recording
 
-This diagram shows how audio recordings are captured and managed.
+This diagram shows how audio recordings are captured and managed. The backend starts the recording worker when the translator creates a producer (starts streaming). The recording worker connects to mediasoup via **Plain RTP transport** (plain-transport/create, plain-transport/connect, then consumer/create). Recordings are written to file storage; the backend serves downloads by reading from the same path (shared volume or local disk).
 
 ```mermaid
 sequenceDiagram
     participant TA as Translator App
+    participant BE as Backend API
     participant MS as mediasoup Service
     participant RW as Recording Worker
-    participant BE as Backend API
+    participant FS as File Storage
     participant AD as Admin Dashboard
     
-    Note over TA,RW: Recording Worker Setup
-    BE->>RW: Start recording (HTTP API) - Session start event
-    RW->>MS: Connect as consumer (HTTP API)
+    Note over TA,RW: Recording Worker Setup (triggered when translator produces)
+    BE->>RW: POST /recording/start (sessionId, eventId, channelId, producerId, mediasoupProducerId)
+    RW->>MS: POST /mediasoup/plain-transport/create, plain-transport/connect
+    RW->>MS: POST /mediasoup/consumer/create
     MS-->>RW: Consumer ID, RTP parameters
     
     Note over TA,RW: Recording Process
     TA->>MS: RTP Audio Stream
-    MS->>RW: RTP Audio Stream (consumer)
+    MS->>RW: RTP Audio Stream (Plain RTP to worker)
     
     loop Recording Session
-        RW->>RW: FFmpeg: RTP → Audio File (WAV/Opus)
-        RW->>RW: Write to file storage
-        RW->>BE: Update recording status (HTTP API)
-        BE->>BE: Update SQLite (recording metadata)
+        RW->>RW: FFmpeg: RTP → Audio File (Opus, SDP-based)
+        RW->>FS: Write recording.opus to session directory
     end
     
-    Note over TA,RW: Recording Completion
-    BE->>RW: Stop recording (HTTP API) - Session end event
+    Note over TA,RW: Recording Completion (session end)
+    BE->>RW: POST /recording/stop (sessionId)
     RW->>RW: Finalize audio file
-    RW->>BE: POST /api/recordings (recording metadata)
+    RW->>BE: POST /api/recordings/complete (sessionId, filePath, durationSeconds, X-Recording-Worker-Key)
     BE->>BE: Store recording metadata in SQLite
     
     Note over AD: Admin Access
     AD->>BE: GET /api/recordings
     BE-->>AD: List of recordings
     AD->>BE: GET /api/recordings/{id}/download
-    BE->>RW: Get recording file
-    RW-->>BE: Recording file
+    BE->>FS: Read recording file (Recordings.Path)
     BE-->>AD: Recording file download
 ```
 
@@ -381,8 +379,8 @@ graph TB
 | C# Backend WebSocket | 5000/5001 | WebSocket (SignalR) | Real-time signaling |
 | mediasoup Service | 4000 | HTTP | mediasoup API |
 | mediasoup RTP | 10000-10100 | UDP | RTP media streams |
-| STT Worker | 5002 | HTTP | STT worker API |
-| Recording Worker | 5003 | HTTP | Recording worker API |
+| STT Worker | 5002 | HTTP | STT worker API (POST /stt/start, POST /stt/stop) |
+| Recording Worker | 5003 | HTTP | Recording worker API (POST /recording/start, POST /recording/stop) |
 | Admin Dashboard | 3000 | HTTP | Web dashboard |
 
 ### Communication Patterns
@@ -392,22 +390,22 @@ graph TB
 - **Backend ↔ Admin Dashboard**: All CRUD operations, monitoring
 - **Backend ↔ mediasoup**: Transport/producer/consumer creation
 - **Backend ↔ STT Worker**: Caption submission, status updates
-- **Backend ↔ Recording Worker**: Recording control, metadata updates
+- **Backend ↔ Recording Worker**: Recording control (start/stop), completion callback (POST /api/recordings/complete)
 
 #### 2. WebSocket (SignalR)
 - **Backend ↔ Mobile Apps**: Real-time signaling (transport creation, producer/consumer setup)
 - **Backend ↔ Mobile Apps**: Caption delivery to listeners
 - **Backend ↔ Admin Dashboard**: Real-time session monitoring (optional)
 
-#### 3. RTP/UDP (WebRTC Media)
-- **Mobile Apps ↔ mediasoup**: Audio streaming (Opus codec)
-- **mediasoup ↔ STT Worker**: Audio feed for transcription
-- **mediasoup ↔ Recording Worker**: Audio feed for recording
+#### 3. RTP/UDP (WebRTC and Plain RTP)
+- **Mobile Apps ↔ mediasoup**: Audio streaming via WebRTC transports (Opus codec)
+- **mediasoup ↔ STT Worker**: Audio feed via Plain RTP transport (worker creates plain-transport, then consumer)
+- **mediasoup ↔ Recording Worker**: Audio feed via Plain RTP transport (same pattern)
 
 #### 4. File System
 - **Backend ↔ SQLite**: Database file access (file-based, no network protocol)
-- **Recording Worker ↔ File Storage**: Audio file writes
-- **Backend ↔ File Storage**: Audio file reads (for downloads)
+- **Recording Worker ↔ File Storage**: Audio file writes (recordings directory)
+- **Backend ↔ File Storage**: Audio file reads for downloads (same Recordings.Path; no request to Recording Worker)
 
 ### Service Dependencies
 
@@ -435,9 +433,9 @@ graph LR
 1. **Authentication Flow**: Client → Backend (REST) → JWT Token
 2. **Session Creation**: Client → Backend (REST) → Session ID
 3. **Signaling Flow**: Client ↔ Backend (WebSocket/SignalR) ↔ mediasoup (HTTP)
-4. **Media Flow**: Client ↔ mediasoup (RTP/UDP)
-5. **Caption Flow**: STT Worker → Backend (HTTP) → Listeners (WebSocket)
-6. **Recording Flow**: Recording Worker → File Storage (File System) → Backend (HTTP) → Admin (REST)
+4. **Media Flow**: Client ↔ mediasoup (RTP/UDP via WebRTC); Workers ↔ mediasoup (Plain RTP)
+5. **Caption Flow**: Backend → STT Worker (POST /stt/start when producer created); STT Worker → Backend (POST /api/captions) → Listeners (SignalR)
+6. **Recording Flow**: Backend → Recording Worker (POST /recording/start, POST /recording/stop); Recording Worker → File Storage (writes); Recording Worker → Backend (POST /api/recordings/complete); Admin → Backend (GET /api/recordings, GET /api/recordings/{id}/download); Backend serves file from File Storage
 
 ---
 
@@ -473,4 +471,4 @@ graph LR
 
 ---
 
-*Last Updated: February 4, 2026*
+*Last Updated: February 9, 2026*
