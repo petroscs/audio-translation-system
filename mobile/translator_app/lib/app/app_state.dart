@@ -115,6 +115,23 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Create a session for a specific channel from the channel list screen.
+  /// Sets _activeSession and _selectedChannel on success.
+  Future<void> createSessionForChannel(Channel channel) async {
+    if (_selectedEvent == null) {
+      throw Exception('Select an event first.');
+    }
+    await _runBusy(() async {
+      _activeSession = await _sessionService.createSession(
+        eventId: _selectedEvent!.id,
+        channelId: channel.id,
+        role: SessionRole.translator,
+      );
+      _selectedChannel = channel;
+      _errorMessage = null;
+    });
+  }
+
   Future<void> startSession(SessionRole role) async {
     await _runBusy(() async {
       await _startSessionInternal(role);
@@ -122,6 +139,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> endSession() async {
+    if (_producerId != null) {
+      throw Exception('Stop broadcasting before ending the session.');
+    }
     await _runBusy(() async {
       await _endSessionInternal();
     });
@@ -132,8 +152,12 @@ class AppState extends ChangeNotifier {
       // 1. Capture audio
       await _webRtcService.startAudioCapture();
 
-      // 2. Create session if needed
-      if (_activeSession == null) {
+      // 2. Create session if needed (or if the active session doesn't match the current selection)
+      final sessionMatches = _activeSession != null &&
+          _activeSession!.eventId == _selectedEvent?.id &&
+          _activeSession!.channelId == _selectedChannel?.id;
+      if (!sessionMatches) {
+        _activeSession = null;
         await _startSessionInternal(SessionRole.translator);
       }
 
@@ -180,7 +204,20 @@ class AppState extends ChangeNotifier {
     await _runBusy(() async {
       await _signalingClient.stop();
       await _webRtcService.stopAudioCapture();
-      await _endSessionInternal();
+      // Clear only producer/transport state; session stays active so user can
+      // start broadcasting again on the same session.
+      _producerId = null;
+      _mediasoupProducerId = null;
+      _activeTransportId = null;
+      _errorMessage = null;
+
+      if (_activeSession != null) {
+        try {
+          await _sessionService.pauseBroadcast(_activeSession!.id);
+        } catch (e) {
+          debugPrint('[AppState] Pause broadcast failed (recording/STT may not stop): $e');
+        }
+      }
     });
   }
 
@@ -191,6 +228,7 @@ class AppState extends ChangeNotifier {
     await _sessionService.endSession(_activeSession!.id);
     _activeSession = null;
     _producerId = null;
+    _mediasoupProducerId = null;
     _activeTransportId = null;
     _errorMessage = null;
   }

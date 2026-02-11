@@ -41,6 +41,9 @@ class AppState extends ChangeNotifier {
   Session? _activeSession;
   String? _activeTransportId;
   String? _consumerId;
+  String? _currentProducerId;
+  String? _broadcastSessionId;
+  bool _isSwitchingProducer = false;
   final List<Map<String, dynamic>> _captions = [];
   bool _captionsEnabled = true;
   DateTime? _lastCaptionReceivedAt;
@@ -99,6 +102,8 @@ class AppState extends ChangeNotifier {
       _activeSession = null;
       _consumerId = null;
       _activeTransportId = null;
+      _currentProducerId = null;
+      _broadcastSessionId = null;
       _errorMessage = null;
     });
   }
@@ -146,6 +151,56 @@ class AppState extends ChangeNotifier {
     });
   }
 
+  /// Join a session by its ID (e.g. from a QR code).
+  /// Resolves event, channel and producer from the backend, then starts listening.
+  Future<void> startListeningBySessionId(String sessionId) async {
+    final trimmed = sessionId.trim();
+    if (trimmed.isEmpty) {
+      _errorMessage = 'Please enter or scan a session ID.';
+      notifyListeners();
+      return;
+    }
+    await _runBusy(() async {
+      // 1. Fetch join info (producer, event, channel) from backend
+      final joinInfo = await _sessionService.getActiveProducerJoinInfo(trimmed);
+      if (joinInfo == null) {
+        throw Exception('No active broadcast for this session.');
+      }
+
+      // 2. Load events if needed and find matching event
+      if (_events.isEmpty) {
+        _events = await _eventService.fetchEvents();
+      }
+      final event = _events.cast<Event?>().firstWhere(
+        (e) => e!.id == joinInfo.eventId,
+        orElse: () => null,
+      );
+      if (event == null) {
+        throw Exception('Event not found for this session.');
+      }
+
+      // 3. Load channels for the event and find matching channel
+      _channels = await _eventService.fetchChannels(event.id);
+      final channel = _channels.cast<Channel?>().firstWhere(
+        (c) => c!.id == joinInfo.channelId,
+        orElse: () => null,
+      );
+      if (channel == null) {
+        throw Exception('Channel not found for this session.');
+      }
+
+      // 4. Set event + channel selection
+      _selectedEvent = event;
+      _selectedChannel = channel;
+
+      // 5. Keep the translator session id for push updates.
+      _broadcastSessionId = trimmed;
+
+      // 5. Now run the full listen flow inline (same as startListening)
+      await _startListeningInternal(joinInfo.producerId);
+    });
+  }
+
   Future<void> startListening({
     required String producerId,
   }) async {
@@ -156,68 +211,98 @@ class AppState extends ChangeNotifier {
       return;
     }
     await _runBusy(() async {
-      // 1. Create session if needed
-      if (_activeSession == null) {
-        await _startSessionInternal(SessionRole.listener);
-      }
-
-      // 2. Connect signaling
-      await _signalingClient.start();
-
-      // 3. Create a receive transport on the server
-      final transport = await _signalingClient.createTransport(
-        sessionId: _activeSession!.id,
-        direction: TransportDirection.receive,
-      );
-      _activeTransportId = transport.transportId;
-      debugPrint('[AppState] Recv transport created: ${transport.transportId}');
-
-      // 4. Create a consumer first (we need the consumer's RTP params for SDP)
-      final consumer = await _signalingClient.consume(
-        transportId: transport.transportId,
-        producerId: trimmedProducerId,
-      );
-      _consumerId = consumer.consumerId;
-      debugPrint('[AppState] Consumer created: ${consumer.consumerId}');
-
-      // 5. Create a real PeerConnection and negotiate with server's ICE/DTLS
-      final recvParams = await _webRtcService.connectRecvTransport(
-        iceParametersJson: transport.iceParameters,
-        iceCandidatesJson: transport.iceCandidates,
-        dtlsParametersJson: transport.dtlsParameters,
-        consumerRtpParametersJson: consumer.rtpParameters,
-      );
-      debugPrint('[AppState] PeerConnection negotiated for receiving');
-
-      // 6. Send real DTLS fingerprint to server
-      await _signalingClient.connectTransport(
-        transportId: transport.transportId,
-        dtlsParameters: recvParams.dtlsParameters,
-      );
-      debugPrint('[AppState] Transport connected with real DTLS params');
-
-      // 7. Join session for captions
-      await _signalingClient.joinSession(_activeSession!.id);
-
-      _signalingClient.removeCaptionHandler();
-      _signalingClient.onCaption((caption) {
-        _captions.add(caption);
-        _lastCaptionReceivedAt = DateTime.now();
-        if (_captions.length > 50) {
-          _captions.removeAt(0);
-        }
-        notifyListeners();
-      });
-
-      // Start monitoring audio levels
-      _startAudioLevelMonitoring();
-
-      _errorMessage = null;
+      _broadcastSessionId = null;
+      await _startListeningInternal(trimmedProducerId);
     });
+  }
+
+  /// Shared listen logic used by both [startListening] and [startListeningBySessionId].
+  /// Must be called inside [_runBusy].
+  Future<void> _startListeningInternal(String producerId) async {
+    // 1. Create session if needed
+    if (_activeSession == null) {
+      await _startSessionInternal(SessionRole.listener);
+    }
+
+    // 2. Connect signaling
+    await _signalingClient.start();
+
+    // 3. Create a receive transport on the server
+    final transport = await _signalingClient.createTransport(
+      sessionId: _activeSession!.id,
+      direction: TransportDirection.receive,
+    );
+    _activeTransportId = transport.transportId;
+    debugPrint('[AppState] Recv transport created: ${transport.transportId}');
+
+    // 4. Create a consumer first (we need the consumer's RTP params for SDP)
+    final consumer = await _signalingClient.consume(
+      transportId: transport.transportId,
+      producerId: producerId,
+    );
+    _consumerId = consumer.consumerId;
+    debugPrint('[AppState] Consumer created: ${consumer.consumerId}');
+
+    // 5. Create a real PeerConnection and negotiate with server's ICE/DTLS
+    final recvParams = await _webRtcService.connectRecvTransport(
+      iceParametersJson: transport.iceParameters,
+      iceCandidatesJson: transport.iceCandidates,
+      dtlsParametersJson: transport.dtlsParameters,
+      consumerRtpParametersJson: consumer.rtpParameters,
+    );
+    debugPrint('[AppState] PeerConnection negotiated for receiving');
+
+    // 6. Send real DTLS fingerprint to server
+    await _signalingClient.connectTransport(
+      transportId: transport.transportId,
+      dtlsParameters: recvParams.dtlsParameters,
+    );
+    debugPrint('[AppState] Transport connected with real DTLS params');
+
+    // 7. Join session for captions
+    await _signalingClient.joinSession(_activeSession!.id);
+
+    _signalingClient.removeCaptionHandler();
+    _signalingClient.onCaption((caption) {
+      _captions.add(caption);
+      _lastCaptionReceivedAt = DateTime.now();
+      if (_captions.length > 50) {
+        _captions.removeAt(0);
+      }
+      notifyListeners();
+    });
+
+    _currentProducerId = producerId;
+    if (_broadcastSessionId != null) {
+      await _signalingClient.subscribeToBroadcastSession(_broadcastSessionId!);
+      _signalingClient.removeActiveProducerChangedHandler();
+      _signalingClient.onActiveProducerChanged((sessionId, producerId) {
+        if (_broadcastSessionId == null || sessionId != _broadcastSessionId) {
+          return;
+        }
+        if (producerId == _currentProducerId || _isSwitchingProducer) {
+          return;
+        }
+        unawaited(_switchToProducer(producerId));
+      });
+    } else {
+      _signalingClient.removeActiveProducerChangedHandler();
+    }
+
+    // Start monitoring audio levels
+    _startAudioLevelMonitoring();
+
+    _errorMessage = null;
   }
 
   Future<void> stopListening() async {
     await _runBusy(() async {
+      _signalingClient.removeActiveProducerChangedHandler();
+      if (_broadcastSessionId != null) {
+        try {
+          await _signalingClient.unsubscribeFromBroadcastSession(_broadcastSessionId!);
+        } catch (_) {}
+      }
       _stopAudioLevelMonitoring();
       _signalingClient.removeCaptionHandler();
       _captions.clear();
@@ -226,6 +311,33 @@ class AppState extends ChangeNotifier {
       await _webRtcService.stopRemoteAudio();
       await _endSessionInternal();
     });
+  }
+
+  Future<void> _switchToProducer(String newProducerId) async {
+    if (_activeSession == null || _isSwitchingProducer) {
+      return;
+    }
+
+    _isSwitchingProducer = true;
+    try {
+      _stopAudioLevelMonitoring();
+      _signalingClient.removeCaptionHandler();
+      _signalingClient.removeActiveProducerChangedHandler();
+      await _signalingClient.stop();
+      await _webRtcService.stopRemoteAudio();
+      _consumerId = null;
+      _activeTransportId = null;
+
+      await _startListeningInternal(newProducerId);
+      _errorMessage = null;
+    } catch (error, stackTrace) {
+      _errorMessage = error.toString();
+      debugPrint('[AppState] Failed to switch producer: $error');
+      debugPrint('Stack trace:\n$stackTrace');
+    } finally {
+      _isSwitchingProducer = false;
+      notifyListeners();
+    }
   }
 
   void _startAudioLevelMonitoring() {
@@ -278,6 +390,9 @@ class AppState extends ChangeNotifier {
     _activeSession = null;
     _consumerId = null;
     _activeTransportId = null;
+    _currentProducerId = null;
+    _broadcastSessionId = null;
+    _isSwitchingProducer = false;
     _captions.clear();
     _lastCaptionReceivedAt = null;
     _errorMessage = null;
@@ -312,6 +427,7 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     _stopAudioLevelMonitoring();
+    _signalingClient.removeActiveProducerChangedHandler();
     _signalingClient.stop();
     _webRtcService.stopAudioCapture();
     _webRtcService.stopRemoteAudio();

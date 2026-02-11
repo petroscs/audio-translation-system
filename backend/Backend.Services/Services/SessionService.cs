@@ -2,6 +2,7 @@ using Backend.Infrastructure.Data;
 using Backend.Models.Entities;
 using Backend.Models.Enums;
 using Backend.Services.Interfaces;
+using Backend.Services.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Services.Services;
@@ -135,5 +136,66 @@ public sealed class SessionService : ISessionService
         });
 
         return entity;
+    }
+
+    public async Task PauseBroadcastAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        var session = await _dbContext.Sessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == sessionId, cancellationToken);
+
+        if (session is null || session.Status != SessionStatus.Active)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _sttWorkerService.StopAsync(sessionId, CancellationToken.None);
+            }
+            catch
+            {
+                // STT worker may be unavailable; ignore
+            }
+        });
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _recordingWorkerService.StopAsync(sessionId, CancellationToken.None);
+            }
+            catch
+            {
+                // Recording worker may be unavailable; ignore
+            }
+        });
+    }
+
+    public async Task<SessionActiveProducerResult?> GetActiveProducerJoinInfoAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        var session = await _dbContext.Sessions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == sessionId, cancellationToken);
+
+        if (session is null || session.Status != SessionStatus.Active)
+        {
+            return null;
+        }
+
+        var producer = await _dbContext.Producers
+            .AsNoTracking()
+            .Where(p => p.SessionId == sessionId)
+            .OrderByDescending(p => p.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (producer is null)
+        {
+            return null;
+        }
+
+        return new SessionActiveProducerResult(producer.Id, session.EventId, session.ChannelId);
     }
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../models/enums.dart';
 import '../models/session.dart';
+import '../models/session_join_info.dart';
 import 'api_client.dart';
 
 class SessionService {
@@ -38,5 +39,20 @@ class SessionService {
     }
 
     return Session.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// Fetch producer ID + event/channel info for a session.
+  /// Returns null when the session has no active broadcast.
+  Future<SessionJoinInfo?> getActiveProducerJoinInfo(String sessionId) async {
+    final response = await _apiClient.get('/api/sessions/$sessionId/active-producer');
+    if (response.statusCode == 404) {
+      return null;
+    }
+    if (response.statusCode != 200) {
+      throw Exception('Failed to get session info (${response.statusCode}).');
+    }
+    return SessionJoinInfo.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 }

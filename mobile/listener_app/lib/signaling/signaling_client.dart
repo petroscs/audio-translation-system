@@ -116,6 +116,20 @@ class SignalingClient {
     await _connection!.invoke('JoinSession', args: [sessionId]);
   }
 
+  Future<void> subscribeToBroadcastSession(String sessionId) async {
+    if (_connection == null || state != HubConnectionState.connected) {
+      throw Exception('SignalR is not connected.');
+    }
+    await _connection!.invoke('SubscribeToBroadcastSession', args: [sessionId]);
+  }
+
+  Future<void> unsubscribeFromBroadcastSession(String sessionId) async {
+    if (_connection == null || state != HubConnectionState.connected) {
+      return;
+    }
+    await _connection!.invoke('UnsubscribeFromBroadcastSession', args: [sessionId]);
+  }
+
   void onCaption(void Function(Map<String, dynamic> caption) callback) {
     _connection?.on('Caption', (arguments) {
       if (arguments != null && arguments.isNotEmpty) {
@@ -129,6 +143,26 @@ class SignalingClient {
 
   void removeCaptionHandler() {
     _connection?.off('Caption');
+  }
+
+  void onActiveProducerChanged(
+    void Function(String sessionId, String producerId) callback,
+  ) {
+    _connection?.on('ActiveProducerChanged', (arguments) {
+      if (arguments == null || arguments.length < 2) {
+        return;
+      }
+      final sessionId = arguments[0]?.toString();
+      final producerId = arguments[1]?.toString();
+      if (sessionId == null || producerId == null) {
+        return;
+      }
+      callback(sessionId, producerId);
+    });
+  }
+
+  void removeActiveProducerChangedHandler() {
+    _connection?.off('ActiveProducerChanged');
   }
 
   Future<Map<String, dynamic>> _invoke(String method, Map<String, dynamic> payload) async {

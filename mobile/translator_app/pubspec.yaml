@@ -13,6 +13,7 @@ dependencies:
   flutter_webrtc: ^1.0.0
   http: any
   provider: any
+  qr_flutter: any
   signalr_core: any
 
 dev_dependencies:

@@ -13,17 +13,20 @@ public sealed class SignalingService : ISignalingService
     private readonly IMediasoupService _mediasoupService;
     private readonly ISttWorkerService _sttWorkerService;
     private readonly IRecordingWorkerService _recordingWorkerService;
+    private readonly IActiveProducerNotifier _activeProducerNotifier;
 
     public SignalingService(
         AppDbContext dbContext,
         IMediasoupService mediasoupService,
         ISttWorkerService sttWorkerService,
-        IRecordingWorkerService recordingWorkerService)
+        IRecordingWorkerService recordingWorkerService,
+        IActiveProducerNotifier activeProducerNotifier)
     {
         _dbContext = dbContext;
         _mediasoupService = mediasoupService;
         _sttWorkerService = sttWorkerService;
         _recordingWorkerService = recordingWorkerService;
+        _activeProducerNotifier = activeProducerNotifier;
     }
 
     public async Task<SignalingTransportResult> CreateTransportAsync(
@@ -162,6 +165,21 @@ public sealed class SignalingService : ISignalingService
             catch
             {
                 // Recording worker may be unavailable; recording will be skipped
+            }
+        });
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _activeProducerNotifier.NotifyActiveProducerChangedAsync(
+                    transport.SessionId,
+                    producer.Id,
+                    CancellationToken.None);
+            }
+            catch
+            {
+                // Notification failures should not block producer creation.
             }
         });
 

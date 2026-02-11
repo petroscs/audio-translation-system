@@ -1,4 +1,5 @@
 > cd audio-translation-system\mediasoup-service
+> $env:MEDIASOUP_ANNOUNCED_IP='192.168.178.82'
 > npm start
 
 

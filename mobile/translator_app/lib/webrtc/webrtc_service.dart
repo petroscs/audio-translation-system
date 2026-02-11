@@ -13,6 +13,8 @@ class MediasoupSendParams {
 class WebRtcService {
   MediaStream? _localStream;
   RTCPeerConnection? _peerConnection;
+  RTCIceConnectionState? _lastIceState;
+  RTCPeerConnectionState? _lastConnectionState;
 
   MediaStream? get localStream => _localStream;
   RTCPeerConnection? get peerConnection => _peerConnection;
@@ -117,9 +119,11 @@ class WebRtcService {
 
     // Monitor connection state
     _peerConnection!.onIceConnectionState = (state) {
+      _lastIceState = state;
       debugPrint('[WebRtcService] ICE connection state: $state');
     };
     _peerConnection!.onConnectionState = (state) {
+      _lastConnectionState = state;
       debugPrint('[WebRtcService] PeerConnection state: $state');
     };
 
@@ -444,6 +448,77 @@ class WebRtcService {
       } catch (_) {}
     }
     return null;
+  }
+
+  /// Collects a diagnostics snapshot to troubleshoot capture vs send vs server receive.
+  /// Avoids secrets; safe to paste into issue reports.
+  Future<Map<String, dynamic>> diagnosticsSnapshot() async {
+    final out = <String, dynamic>{
+      'hasLocalStream': _localStream != null,
+      'hasPeerConnection': _peerConnection != null,
+      'lastIceState': _lastIceState?.toString(),
+      'lastConnectionState': _lastConnectionState?.toString(),
+    };
+
+    // Track info
+    try {
+      final tracks = _localStream?.getAudioTracks() ?? [];
+      out['audioTracks'] = tracks.map((t) {
+        return {
+          'id': t.id,
+          'enabled': t.enabled,
+          'muted': t.muted,
+        };
+      }).toList();
+    } catch (e) {
+      out['audioTracksError'] = e.toString();
+    }
+
+    // Stats (best-effort)
+    try {
+      if (_peerConnection != null && _localStream != null) {
+        final tracks = _localStream!.getAudioTracks();
+        final stats = tracks.isNotEmpty
+            ? await _peerConnection!.getStats(tracks.first)
+            : await _peerConnection!.getStats();
+
+        Map<String, dynamic>? mediaSource;
+        Map<String, dynamic>? outboundRtp;
+
+        for (final report in stats) {
+          final type = report.type;
+          final values = Map<String, dynamic>.from(report.values);
+          if (type == 'media-source' && mediaSource == null) {
+            mediaSource = values;
+          }
+          if (type == 'outbound-rtp' && outboundRtp == null) {
+            outboundRtp = values;
+          }
+        }
+
+        // Keep only a small, high-signal subset.
+        out['mediaSource'] = mediaSource == null
+            ? null
+            : {
+                'audioLevel': mediaSource['audioLevel'],
+                'totalAudioEnergy': mediaSource['totalAudioEnergy'],
+                'totalSamplesDuration': mediaSource['totalSamplesDuration'],
+              };
+
+        out['outboundRtp'] = outboundRtp == null
+            ? null
+            : {
+                'bytesSent': outboundRtp['bytesSent'],
+                'packetsSent': outboundRtp['packetsSent'],
+                'roundTripTime': outboundRtp['roundTripTime'],
+                'targetBitrate': outboundRtp['targetBitrate'],
+              };
+      }
+    } catch (e) {
+      out['statsError'] = e.toString();
+    }
+
+    return out;
   }
 
   Future<void> stopAudioCapture() async {

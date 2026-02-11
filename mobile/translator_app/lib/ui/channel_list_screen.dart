@@ -40,9 +40,43 @@ class _ChannelListScreenState extends State<ChannelListScreen> {
           itemCount: appState.channels.length,
           itemBuilder: (context, index) {
             final channel = appState.channels[index];
+            final hasSessionForChannel =
+                appState.activeSession?.channelId == channel.id;
             return ListTile(
               title: Text(channel.name),
               subtitle: Text(channel.languageCode),
+              trailing: hasSessionForChannel
+                  ? const Chip(label: Text('Session active'))
+                  : IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      tooltip: 'Create session',
+                      onPressed: appState.isBusy
+                          ? null
+                          : () async {
+                              await appState.createSessionForChannel(channel);
+                              if (!context.mounted) return;
+                              if (appState.errorMessage == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        'Session created for ${channel.name}'),
+                                  ),
+                                );
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const TranslatorDashboard()),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content:
+                                        Text(appState.errorMessage ?? 'Error'),
+                                  ),
+                                );
+                              }
+                            },
+                    ),
               onTap: () {
                 appState.selectChannel(channel);
                 Navigator.of(context).push(

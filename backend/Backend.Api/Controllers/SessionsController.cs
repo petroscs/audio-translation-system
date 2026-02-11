@@ -155,6 +155,46 @@ public sealed class SessionsController : ControllerBase
         return Ok(MapSession(ended!));
     }
 
+    [HttpPost("{id:guid}/broadcast/pause")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> PauseBroadcast(Guid id, CancellationToken cancellationToken)
+    {
+        var session = await _sessionService.GetByIdAsync(id, cancellationToken);
+        if (session is null)
+        {
+            return NotFound();
+        }
+
+        if (!IsAdmin() && session.UserId != GetCurrentUserId())
+        {
+            return Forbid();
+        }
+
+        await _sessionService.PauseBroadcastAsync(id, cancellationToken);
+        return NoContent();
+    }
+
+    [HttpGet("{id:guid}/active-producer")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<SessionActiveProducerResponse>> GetActiveProducer(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _sessionService.GetActiveProducerJoinInfoAsync(id, cancellationToken);
+        if (result is null)
+        {
+            return NotFound("No active broadcast for this session.");
+        }
+
+        return Ok(new SessionActiveProducerResponse
+        {
+            ProducerId = result.ProducerId,
+            EventId = result.EventId,
+            ChannelId = result.ChannelId
+        });
+    }
+
     [HttpGet("{id:guid}/captions")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]

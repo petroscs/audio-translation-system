@@ -26,18 +26,38 @@ public sealed class RecordingService : IRecordingService
             throw new InvalidOperationException("Session not found.");
         }
 
-        var recording = new Recording
-        {
-            Id = Guid.NewGuid(),
-            SessionId = sessionId,
-            FilePath = filePath ?? string.Empty,
-            DurationSeconds = durationSeconds,
-            StartedAt = session.StartedAt,
-            EndedAt = DateTime.UtcNow,
-            Status = RecordingStatus.Completed
-        };
+        // Keep exactly one recording row per session.
+        var existingRecordings = await _dbContext.Recordings
+            .Where(r => r.SessionId == sessionId)
+            .OrderByDescending(r => r.EndedAt)
+            .ThenByDescending(r => r.StartedAt)
+            .ToListAsync(cancellationToken);
 
-        _dbContext.Recordings.Add(recording);
+        Recording recording;
+        if (existingRecordings.Count > 0)
+        {
+            recording = existingRecordings[0];
+            if (existingRecordings.Count > 1)
+            {
+                _dbContext.Recordings.RemoveRange(existingRecordings.Skip(1));
+            }
+        }
+        else
+        {
+            recording = new Recording
+            {
+                Id = Guid.NewGuid(),
+                SessionId = sessionId,
+                StartedAt = session.StartedAt
+            };
+            _dbContext.Recordings.Add(recording);
+        }
+
+        recording.FilePath = filePath ?? string.Empty;
+        recording.DurationSeconds = durationSeconds;
+        recording.EndedAt = DateTime.UtcNow;
+        recording.Status = RecordingStatus.Completed;
+
         await _dbContext.SaveChangesAsync(cancellationToken);
         return recording;
     }
@@ -82,9 +102,16 @@ public sealed class RecordingService : IRecordingService
             query = query.Where(r => r.SessionId == sessionId.Value);
         }
 
-        return await query
+        var recordings = await query
             .OrderByDescending(r => r.EndedAt)
             .ToListAsync(cancellationToken);
+
+        // Display one recording per session in list endpoints.
+        return recordings
+            .GroupBy(r => r.SessionId)
+            .Select(group => group.First())
+            .OrderByDescending(r => r.EndedAt)
+            .ToList();
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)

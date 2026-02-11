@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../app/app_state.dart';
 import 'audio_reception_indicator.dart';
+import 'qr_scanner_screen.dart';
 
 class ListenerDashboard extends StatefulWidget {
   const ListenerDashboard({super.key});
@@ -12,14 +13,55 @@ class ListenerDashboard extends StatefulWidget {
 }
 
 class _ListenerDashboardState extends State<ListenerDashboard> {
-  final _producerController = TextEditingController();
+  final _sessionIdController = TextEditingController();
   final _captionScrollController = ScrollController();
 
   @override
   void dispose() {
-    _producerController.dispose();
+    _sessionIdController.dispose();
     _captionScrollController.dispose();
     super.dispose();
+  }
+
+  /// Extract session ID from a raw GUID or URL like listenerapp://session/{id}.
+  static String? _parseSessionId(String raw) {
+    final trimmed = raw.trim();
+    final uri = Uri.tryParse(trimmed);
+    if (uri != null && uri.pathSegments.length >= 2 && uri.pathSegments[0] == 'session') {
+      return uri.pathSegments[1];
+    }
+    return trimmed;
+  }
+
+  Future<void> _joinBySessionId(BuildContext context, AppState appState) async {
+    await appState.startListeningBySessionId(_sessionIdController.text.trim());
+    if (!context.mounted) return;
+    if (appState.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(appState.errorMessage ?? 'Error')),
+      );
+    }
+  }
+
+  Future<void> _scanQr(BuildContext context, AppState appState) async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+    );
+    if (result == null || result.isEmpty || !context.mounted) return;
+    final sessionId = _parseSessionId(result);
+    if (sessionId == null || sessionId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid QR code')),
+      );
+      return;
+    }
+    await appState.startListeningBySessionId(sessionId);
+    if (!context.mounted) return;
+    if (appState.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(appState.errorMessage ?? 'Error')),
+      );
+    }
   }
 
   @override
@@ -60,11 +102,41 @@ class _ListenerDashboardState extends State<ListenerDashboard> {
                   Text('Session: ${session?.id ?? 'Not started'}'),
                   const SizedBox(height: 16),
                   TextField(
-                    controller: _producerController,
+                    controller: _sessionIdController,
                     decoration: const InputDecoration(
-                      labelText: 'Producer ID',
-                      helperText: 'Paste the producer ID from the translator app.',
+                      labelText: 'Session ID',
+                      helperText: 'Enter the session ID or scan the QR code from the translator or admin.',
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: (appState.isBusy || appState.consumerId != null)
+                              ? null
+                              : () => _scanQr(context, appState),
+                          icon: const Icon(Icons.qr_code_scanner),
+                          label: const Text('Scan QR'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: (appState.isBusy || appState.consumerId != null)
+                              ? null
+                              : () => _joinBySessionId(context, appState),
+                          child: appState.isBusy
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Text('Join'),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   if (appState.consumerId != null)
@@ -76,7 +148,6 @@ class _ListenerDashboardState extends State<ListenerDashboard> {
                     ),
                   if (appState.consumerId != null) ...[
                     const SizedBox(height: 16),
-                    // Audio reception indicator
                     AudioReceptionIndicator(
                       isConnected: appState.isSignalingConnected,
                       hasConsumer: appState.consumerId != null,
@@ -106,31 +177,14 @@ class _ListenerDashboardState extends State<ListenerDashboard> {
                     const SizedBox(height: 8),
                   ],
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: (appState.isBusy || appState.consumerId != null)
-                              ? null
-                              : () => appState.startListening(
-                                    producerId: _producerController.text.trim(),
-                                  ),
-                          child: appState.isBusy
-                              ? const CircularProgressIndicator()
-                              : const Text('Start Listening'),
-                        ),
+                  if (appState.consumerId != null)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: appState.isBusy ? null : () => appState.stopListening(),
+                        child: const Text('Stop'),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: (appState.isBusy || appState.consumerId == null)
-                              ? null
-                              : () => appState.stopListening(),
-                          child: const Text('Stop'),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
                 ],
               ),
             ),

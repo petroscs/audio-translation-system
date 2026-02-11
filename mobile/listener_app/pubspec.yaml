@@ -12,6 +12,7 @@ dependencies:
   flutter_secure_storage: any
   flutter_webrtc: any
   http: any
+  mobile_scanner: any
   provider: any
   signalr_core: any
 

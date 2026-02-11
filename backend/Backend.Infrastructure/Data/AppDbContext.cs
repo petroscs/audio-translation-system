@@ -157,7 +157,7 @@ public sealed class AppDbContext : DbContext
                 .HasForeignKey(recording => recording.SessionId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasIndex(recording => recording.SessionId);
+            entity.HasIndex(recording => recording.SessionId).IsUnique();
             entity.HasIndex(recording => recording.Status);
         });
 

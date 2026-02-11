@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import type { Session } from '../api/types';
 import * as sessionsApi from '../api/sessions';
 import * as eventsApi from '../api/events';
@@ -155,6 +155,10 @@ export default function Sessions() {
               </>
             )}
           </dl>
+          <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+            <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', color: '#64748b' }}>Listeners: scan to join</p>
+            <QRCodeSVG value={detail.id} size={160} level="M" />
+          </div>
           <div style={{ marginTop: '1rem', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             {detail.status === 'Active' && (
               <button

@@ -188,6 +188,38 @@ public sealed class SignalingHub : Hub
         await Groups.AddToGroupAsync(Context.ConnectionId, $"session:{sessionId}");
     }
 
+    public async Task SubscribeToBroadcastSession(Guid sessionId)
+    {
+        if (sessionId == Guid.Empty)
+        {
+            throw new HubException("SessionId is required.");
+        }
+
+        var userId = GetUserId();
+        if (userId is null)
+        {
+            throw new HubException("Unauthorized.");
+        }
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"session:{sessionId}");
+    }
+
+    public async Task UnsubscribeFromBroadcastSession(Guid sessionId)
+    {
+        if (sessionId == Guid.Empty)
+        {
+            throw new HubException("SessionId is required.");
+        }
+
+        var userId = GetUserId();
+        if (userId is null)
+        {
+            throw new HubException("Unauthorized.");
+        }
+
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"session:{sessionId}");
+    }
+
     public Task<string> Ping()
     {
         return Task.FromResult("pong");

@@ -168,6 +168,8 @@ sequenceDiagram
     end
 ```
 
+**Listener producer switching (push):** when a translator resumes and creates a new producer on the same translator session, backend signaling emits `ActiveProducerChanged(sessionId, producerId)` to the SignalR group `session:{sessionId}`. Listeners that joined by QR subscribe to that broadcast session group via `SubscribeToBroadcastSession(sessionId)` and switch their consumer to the new producer without manual reconnect.
+
 ---
 
 ## Service Interaction Flow - STT/Captions
@@ -212,6 +214,8 @@ sequenceDiagram
 
 This diagram shows how audio recordings are captured and managed. The backend starts the recording worker when the translator creates a producer (starts streaming). The recording worker connects to mediasoup via **Plain RTP transport** (plain-transport/create, plain-transport/connect, then consumer/create). Recordings are written to file storage; the backend serves downloads by reading from the same path (shared volume or local disk).
 
+**Stop-as-pause:** When the translator stops broadcasting (without ending the session), the translator app calls `POST /api/sessions/{id}/broadcast/pause`. The backend stops the recording and STT workers for that session so the session can resume later. When the translator starts broadcasting again on the same session, a new producer is created and the backend starts recording and STT again for that session.
+
 ```mermaid
 sequenceDiagram
     participant TA as Translator App
@@ -236,8 +240,10 @@ sequenceDiagram
         RW->>FS: Write recording.opus to session directory
     end
     
-    Note over TA,RW: Recording Completion (session end)
+    Note over TA,RW: Recording stop (session end or broadcast pause)
+    TA->>BE: POST /api/sessions/{id}/broadcast/pause (when translator stops)
     BE->>RW: POST /recording/stop (sessionId)
+    Note over TA,RW: Same recording/stop is also sent when session ends
     RW->>RW: Finalize audio file
     RW->>BE: POST /api/recordings/complete (sessionId, filePath, durationSeconds, X-Recording-Worker-Key)
     BE->>BE: Store recording metadata in SQLite
@@ -435,7 +441,7 @@ graph LR
 3. **Signaling Flow**: Client ↔ Backend (WebSocket/SignalR) ↔ mediasoup (HTTP)
 4. **Media Flow**: Client ↔ mediasoup (RTP/UDP via WebRTC); Workers ↔ mediasoup (Plain RTP)
 5. **Caption Flow**: Backend → STT Worker (POST /stt/start when producer created); STT Worker → Backend (POST /api/captions) → Listeners (SignalR)
-6. **Recording Flow**: Backend → Recording Worker (POST /recording/start, POST /recording/stop); Recording Worker → File Storage (writes); Recording Worker → Backend (POST /api/recordings/complete); Admin → Backend (GET /api/recordings, GET /api/recordings/{id}/download); Backend serves file from File Storage
+6. **Recording Flow**: Backend → Recording Worker (POST /recording/start, POST /recording/stop); Recording Worker → File Storage (writes); Recording Worker → Backend (POST /api/recordings/complete); Admin → Backend (GET /api/recordings, GET /api/recordings/{id}/download); Backend serves file from File Storage. When the translator pauses (stops broadcast without ending session), Translator App → Backend (POST /api/sessions/{id}/broadcast/pause) → Backend stops Recording and STT workers for that session; on resume, a new producer is created and recording/STT start again.
 
 ---
 

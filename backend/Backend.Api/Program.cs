@@ -110,6 +110,7 @@ builder.Services.AddScoped<ISignalingService, SignalingService>();
 builder.Services.AddScoped<ICaptionService, CaptionService>();
 builder.Services.AddScoped<IRecordingService, RecordingService>();
 builder.Services.AddSingleton<ICaptionBroadcaster, CaptionBroadcaster>();
+builder.Services.AddSingleton<IActiveProducerNotifier, ActiveProducerNotifier>();
 builder.Services.AddHttpClient<IMediasoupService, MediasoupService>();
 builder.Services.AddHttpClient<ISttWorkerService, SttWorkerService>();
 builder.Services.AddHttpClient<IRecordingWorkerService, RecordingWorkerService>();

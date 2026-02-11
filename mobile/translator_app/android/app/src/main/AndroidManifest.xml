@@ -2,6 +2,8 @@
     <!-- Microphone permission for audio capture -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <!-- Required by WebRTC NetworkMonitor (flutter_webrtc) when establishing connection -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     
     <application
         android:label="translator_app"
@@ -34,6 +36,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Disable Impeller (Vulkan) to avoid native crash in WebRTC on some devices (e.g. Xiaomi) -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

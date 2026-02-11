@@ -35,4 +35,12 @@ class SessionService {
 
     return Session.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
+
+  /// Pause broadcast for the session (stops recording and STT; session stays active).
+  Future<void> pauseBroadcast(String sessionId) async {
+    final response = await _apiClient.post('/api/sessions/$sessionId/broadcast/pause', {});
+    if (response.statusCode != 204) {
+      throw Exception('Failed to pause broadcast (${response.statusCode}).');
+    }
+  }
 }

@@ -20,6 +20,128 @@ const logger = pino({
 });
 
 const activePipelines = new Map();
+const { spawn } = require("child_process");
+
+function getSessionDir(sessionId) {
+  const recordingsPath = path.resolve(config.recordingsPath);
+  return path.join(recordingsPath, String(sessionId));
+}
+
+function getAggregatePath(sessionId) {
+  return path.join(getSessionDir(sessionId), "recording.opus");
+}
+
+function getRelativeAggregatePath(sessionId) {
+  return path.join(String(sessionId), "recording.opus");
+}
+
+function getSegmentPath(sessionId) {
+  const dir = path.join(getSessionDir(sessionId), "segments");
+  fs.mkdirSync(dir, { recursive: true });
+  return path.join(dir, `segment-${Date.now()}-${Math.floor(Math.random() * 100000)}.opus`);
+}
+
+function escapeForConcatList(filePath) {
+  return filePath.replace(/'/g, "'\\''");
+}
+
+async function probeDurationSeconds(filePath) {
+  const ffprobePath = config.ffprobePath;
+  return new Promise((resolve) => {
+    const probe = spawn(
+      ffprobePath,
+      [
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        filePath
+      ],
+      { stdio: ["ignore", "pipe", "pipe"] }
+    );
+    let out = "";
+    probe.stdout.on("data", (d) => {
+      out += d.toString();
+    });
+    probe.on("error", () => resolve(0));
+    probe.on("exit", (code) => {
+      if (code !== 0) {
+        resolve(0);
+        return;
+      }
+      const duration = parseFloat(out.trim(), 10);
+      resolve(Number.isFinite(duration) ? Math.round(duration) : 0);
+    });
+  });
+}
+
+async function mergeSegmentIntoAggregate(sessionId, segmentPath) {
+  const sessionDir = getSessionDir(sessionId);
+  const aggregatePath = getAggregatePath(sessionId);
+  fs.mkdirSync(sessionDir, { recursive: true });
+
+  if (!fs.existsSync(aggregatePath)) {
+    fs.renameSync(segmentPath, aggregatePath);
+    return aggregatePath;
+  }
+
+  const concatListPath = path.join(sessionDir, `concat-${Date.now()}.txt`);
+  const mergedTempPath = path.join(sessionDir, `recording-merged-${Date.now()}.opus`);
+
+  fs.writeFileSync(
+    concatListPath,
+    `file '${escapeForConcatList(aggregatePath)}'\nfile '${escapeForConcatList(segmentPath)}'\n`,
+    "utf8"
+  );
+
+  try {
+    await new Promise((resolve, reject) => {
+      const proc = spawn(
+        config.ffmpegPath,
+        [
+          "-hide_banner",
+          "-loglevel",
+          "error",
+          "-f",
+          "concat",
+          "-safe",
+          "0",
+          "-i",
+          concatListPath,
+          "-c",
+          "copy",
+          "-y",
+          mergedTempPath
+        ],
+        { stdio: ["ignore", "pipe", "pipe"] }
+      );
+      let stderr = "";
+      proc.stderr.on("data", (d) => {
+        stderr += d.toString();
+      });
+      proc.on("error", reject);
+      proc.on("exit", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(stderr || `ffmpeg concat failed with code ${code}`));
+      });
+    });
+
+    fs.unlinkSync(aggregatePath);
+    fs.renameSync(mergedTempPath, aggregatePath);
+    fs.unlinkSync(segmentPath);
+  } finally {
+    try {
+      if (fs.existsSync(concatListPath)) fs.unlinkSync(concatListPath);
+    } catch (_) {}
+    try {
+      if (fs.existsSync(mergedTempPath)) fs.unlinkSync(mergedTempPath);
+    } catch (_) {}
+  }
+
+  return aggregatePath;
+}
 
 async function startPipeline(sessionId, eventId, channelId, producerId, mediasoupProducerId) {
   if (activePipelines.has(sessionId)) {
@@ -32,9 +154,8 @@ async function startPipeline(sessionId, eventId, channelId, producerId, mediasou
   }
 
   const rtpPort = getNextRtpPort();
-  const recordingsPath = path.resolve(config.recordingsPath);
-  const sessionDir = path.join(recordingsPath, String(sessionId));
-  const outputPath = path.join(sessionDir, "recording.opus");
+  const segmentPath = getSegmentPath(sessionId);
+  const aggregatePath = getAggregatePath(sessionId);
 
   let rtpToFile = null;
   try {
@@ -64,7 +185,7 @@ async function startPipeline(sessionId, eventId, channelId, producerId, mediasou
       { rtpPort, sdpPreview: sdpContent.split("\r\n").slice(0, 7).join(" | ") },
       "Starting FFmpeg with SDP matching consumer payload type"
     );
-    rtpToFile = createRtpToFile(rtpPort, outputPath, logger, { sdpContent });
+    rtpToFile = createRtpToFile(rtpPort, segmentPath, logger, { sdpContent });
   } catch (err) {
     if (rtpToFile) rtpToFile.close();
     throw err;
@@ -73,11 +194,12 @@ async function startPipeline(sessionId, eventId, channelId, producerId, mediasou
   activePipelines.set(sessionId, {
     rtpToFile,
     sessionId,
-    outputPath,
-    relativePath: path.join(String(sessionId), "recording.opus")
+    segmentPath,
+    aggregatePath,
+    relativePath: getRelativeAggregatePath(sessionId)
   });
 
-  logger.info({ sessionId, rtpPort, outputPath }, "Recording pipeline started");
+  logger.info({ sessionId, rtpPort, segmentPath, aggregatePath }, "Recording pipeline started");
 }
 
 async function stopPipeline(sessionId) {
@@ -93,7 +215,8 @@ async function stopPipeline(sessionId) {
   activePipelines.delete(sessionId);
 
   const relativePath = pipeline.relativePath;
-  const outputPath = pipeline.outputPath;
+  const segmentPath = pipeline.segmentPath;
+  const aggregatePath = pipeline.aggregatePath;
 
   let durationSeconds = 0;
   try {
@@ -103,29 +226,54 @@ async function stopPipeline(sessionId) {
     logger.warn({ err: e, sessionId }, "Could not get duration");
   }
 
-  const fileExists = fs.existsSync(outputPath);
-  const stat = fileExists ? fs.statSync(outputPath) : null;
-  const hasContent = stat && stat.size > 0;
-  const finalDuration = hasContent ? (durationSeconds ?? 0) : 0;
+  const segmentExists = fs.existsSync(segmentPath);
+  const segmentStat = segmentExists ? fs.statSync(segmentPath) : null;
+  const hasSegmentContent = segmentStat && segmentStat.size > 0;
+
+  let finalDuration = 0;
+  if (hasSegmentContent) {
+    await mergeSegmentIntoAggregate(sessionId, segmentPath);
+  } else if (segmentExists) {
+    try {
+      fs.unlinkSync(segmentPath);
+    } catch (_) {}
+  }
+
+  const aggregateExists = fs.existsSync(aggregatePath);
+  const aggregateStat = aggregateExists ? fs.statSync(aggregatePath) : null;
+  const hasAggregateContent = aggregateStat && aggregateStat.size > 0;
+  if (hasAggregateContent) {
+    finalDuration = await probeDurationSeconds(aggregatePath);
+  } else {
+    finalDuration = 0;
+  }
 
   logger.info(
-    { sessionId, fileExists, fileSize: stat?.size ?? 0, durationSeconds: finalDuration },
+    {
+      sessionId,
+      segmentExists,
+      segmentSize: segmentStat?.size ?? 0,
+      aggregateExists,
+      aggregateSize: aggregateStat?.size ?? 0,
+      segmentDurationSeconds: durationSeconds ?? 0,
+      durationSeconds: finalDuration
+    },
     "Recording stop: file check"
   );
 
   try {
     await sendRecordingComplete(sessionId, relativePath, finalDuration);
     logger.info(
-      { sessionId, relativePath, durationSeconds: finalDuration, hadContent: hasContent },
+      { sessionId, relativePath, durationSeconds: finalDuration, hadContent: hasAggregateContent },
       "Recording complete sent to backend"
     );
   } catch (err) {
     logger.error({ err, sessionId }, "Failed to send recording complete to backend");
   }
 
-  if (!fileExists || !hasContent) {
+  if (!aggregateExists || !hasAggregateContent) {
     logger.warn(
-      { sessionId, fileExists, hasContent },
+      { sessionId, aggregateExists, hasAggregateContent },
       "Recording had no audio data; backend notified with duration 0"
     );
   }
@@ -203,8 +351,6 @@ function createApp() {
 
   return app;
 }
-
-const { spawn } = require("child_process");
 
 function validateFfmpeg(ffmpegPath, logger) {
   return new Promise((resolve) => {

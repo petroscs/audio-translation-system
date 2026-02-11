@@ -6,7 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../webrtc/webrtc_service.dart';
 
 /// A visual indicator that shows audio capture activity
-/// Displays animated waveform bars that respond to audio levels
+/// Displays animated waveform bars that respond to *real* audio levels (when available).
 class AudioLevelIndicator extends StatefulWidget {
   final MediaStream? stream;
   final WebRtcService? webRtcService;
@@ -131,7 +131,6 @@ class _AudioLevelIndicatorState extends State<AudioLevelIndicator>
               _audioLevels[i] = (baseLevel + variation).clamp(0.0, 0.3);
             }
           } else {
-            // No real audio level available - show inactive state
             _isActive = false;
             _audioLevels = List.filled(20, 0.0);
           }
