@@ -20,8 +20,19 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: any
+  flutter_launcher_icons: any
 
 flutter:
   uses-material-design: true
   assets:
     - assets/
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  web:
+    generate: true
+  windows:
+    generate: true
+  image_path: "translator_app_icon_regenerated.png"

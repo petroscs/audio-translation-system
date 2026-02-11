@@ -62,7 +62,7 @@ class _TranslatorDashboardState extends State<TranslatorDashboard> {
           children: [
             Text('Event: ${appState.selectedEvent?.name ?? '-'}'),
             Text('Channel: ${appState.selectedChannel?.name ?? '-'}'),
-            Text('Session: ${session?.id ?? 'Not started'}'),
+            SelectableText('Session: ${session?.id ?? 'Not started'}'),
             const SizedBox(height: 16),
             // Audio level indicator (real level only; see Diagnostics for deeper troubleshooting)
             AudioLevelIndicator(
@@ -81,27 +81,29 @@ class _TranslatorDashboardState extends State<TranslatorDashboard> {
                 child: Text(appState.errorMessage!, style: const TextStyle(color: Colors.red)),
               ),
             if (appState.producerId != null && session != null) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: appState.isBusy ? null : () => _takeDiagnosticsSnapshot(appState),
-                      child: const Text('Diagnostics snapshot'),
+              if (appState.isAdmin) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: appState.isBusy ? null : () => _takeDiagnosticsSnapshot(appState),
+                        child: const Text('Diagnostics snapshot'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_diagText != null) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 120,
+                    child: SingleChildScrollView(
+                      child: SelectableText(
+                        _diagText!,
+                        style: const TextStyle(fontSize: 11),
+                      ),
                     ),
                   ),
                 ],
-              ),
-              if (_diagText != null) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 120,
-                  child: SingleChildScrollView(
-                    child: SelectableText(
-                      _diagText!,
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ),
-                ),
               ],
               const SizedBox(height: 16),
               SizedBox(

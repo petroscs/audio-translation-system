@@ -10,7 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_secure_storage: any
-  flutter_webrtc: any
+  flutter_webrtc: ^1.0.0
   http: any
   mobile_scanner: any
   provider: any
@@ -20,8 +20,19 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: any
+  flutter_launcher_icons: any
 
 flutter:
   uses-material-design: true
   assets:
     - assets/
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  web:
+    generate: true
+  windows:
+    generate: true
+  image_path: "listener_app_icon.png"

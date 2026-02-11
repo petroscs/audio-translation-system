@@ -17,6 +17,39 @@ class AuthService {
   AuthTokens? _tokens;
 
   bool get isAuthenticated => _tokens != null && !_tokens!.isExpired;
+  bool get isAdmin {
+    final token = _tokens?.accessToken;
+    if (token == null || token.isEmpty) {
+      return false;
+    }
+
+    try {
+      final parts = token.split('.');
+      if (parts.length < 2) {
+        return false;
+      }
+
+      final normalized = base64Url.normalize(parts[1]);
+      final payloadJson = utf8.decode(base64Url.decode(normalized));
+      final payload = jsonDecode(payloadJson);
+      if (payload is! Map<String, dynamic>) {
+        return false;
+      }
+
+      const roleClaimUri = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role';
+      final dynamic roleValue = payload['role'] ?? payload[roleClaimUri];
+      if (roleValue is String) {
+        return roleValue.toLowerCase() == 'admin';
+      }
+      if (roleValue is List) {
+        return roleValue.any((value) => value.toString().toLowerCase() == 'admin');
+      }
+    } catch (_) {
+      return false;
+    }
+
+    return false;
+  }
   String? get accessToken => _tokens?.accessToken;
   String? get refreshToken => _tokens?.refreshToken;
 

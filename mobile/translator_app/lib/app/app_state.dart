@@ -46,6 +46,7 @@ class AppState extends ChangeNotifier {
   bool get isInitializing => _isInitializing;
   bool get isBusy => _isBusy;
   bool get isAuthenticated => _authService.isAuthenticated;
+  bool get isAdmin => _authService.isAdmin;
   String? get errorMessage => _errorMessage;
 
   List<Event> get events => _events;
