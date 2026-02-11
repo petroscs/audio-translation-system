@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:signalr_core/signalr_core.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../models/channel.dart';
 import '../models/enums.dart';
@@ -94,6 +95,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> logout() async {
     await _runBusy(() async {
+      await _disableWakeLock();
       await _authService.logout();
       _events = [];
       _channels = [];
@@ -291,6 +293,7 @@ class AppState extends ChangeNotifier {
 
     // Start monitoring audio levels
     _startAudioLevelMonitoring();
+    await _enableWakeLock();
 
     _errorMessage = null;
   }
@@ -310,6 +313,7 @@ class AppState extends ChangeNotifier {
       await _signalingClient.stop();
       await _webRtcService.stopRemoteAudio();
       await _endSessionInternal();
+      await _disableWakeLock();
     });
   }
 
@@ -395,6 +399,7 @@ class AppState extends ChangeNotifier {
     _isSwitchingProducer = false;
     _captions.clear();
     _lastCaptionReceivedAt = null;
+    await _disableWakeLock();
     _errorMessage = null;
   }
 
@@ -403,6 +408,23 @@ class AppState extends ChangeNotifier {
     // On desktop, 'inactive' fires on window focus loss — must NOT kill the connection.
     if (state == AppLifecycleState.detached) {
       _signalingClient.stop();
+      unawaited(_disableWakeLock());
+    }
+  }
+
+  Future<void> _enableWakeLock() async {
+    try {
+      await WakelockPlus.enable();
+    } catch (e) {
+      debugPrint('[AppState] Failed to enable wake lock: $e');
+    }
+  }
+
+  Future<void> _disableWakeLock() async {
+    try {
+      await WakelockPlus.disable();
+    } catch (e) {
+      debugPrint('[AppState] Failed to disable wake lock: $e');
     }
   }
 
@@ -431,6 +453,7 @@ class AppState extends ChangeNotifier {
     _signalingClient.stop();
     _webRtcService.stopAudioCapture();
     _webRtcService.stopRemoteAudio();
+    unawaited(_disableWakeLock());
     super.dispose();
   }
 }

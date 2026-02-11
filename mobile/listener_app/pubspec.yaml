@@ -15,6 +15,7 @@ dependencies:
   mobile_scanner: any
   provider: any
   signalr_core: any
+  wakelock_plus: any
 
 dev_dependencies:
   flutter_test:

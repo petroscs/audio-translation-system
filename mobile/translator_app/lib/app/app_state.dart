@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../models/channel.dart';
 import '../models/enums.dart';
@@ -77,6 +79,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> logout() async {
     await _runBusy(() async {
+      await _disableWakeLock();
       await _authService.logout();
       _events = [];
       _channels = [];
@@ -197,6 +200,7 @@ class AppState extends ChangeNotifier {
       _producerId = producer.producerId;
       _mediasoupProducerId = producer.mediasoupProducerId;
       debugPrint('[AppState] Producer created: $_producerId (mediasoup: $_mediasoupProducerId)');
+      await _enableWakeLock();
       _errorMessage = null;
     });
   }
@@ -205,6 +209,7 @@ class AppState extends ChangeNotifier {
     await _runBusy(() async {
       await _signalingClient.stop();
       await _webRtcService.stopAudioCapture();
+      await _disableWakeLock();
       // Clear only producer/transport state; session stays active so user can
       // start broadcasting again on the same session.
       _producerId = null;
@@ -231,6 +236,7 @@ class AppState extends ChangeNotifier {
     _producerId = null;
     _mediasoupProducerId = null;
     _activeTransportId = null;
+    await _disableWakeLock();
     _errorMessage = null;
   }
 
@@ -256,6 +262,23 @@ class AppState extends ChangeNotifier {
     if (state == AppLifecycleState.detached) {
       _signalingClient.stop();
       _webRtcService.stopAudioCapture();
+      unawaited(_disableWakeLock());
+    }
+  }
+
+  Future<void> _enableWakeLock() async {
+    try {
+      await WakelockPlus.enable();
+    } catch (e) {
+      debugPrint('[AppState] Failed to enable wake lock: $e');
+    }
+  }
+
+  Future<void> _disableWakeLock() async {
+    try {
+      await WakelockPlus.disable();
+    } catch (e) {
+      debugPrint('[AppState] Failed to disable wake lock: $e');
     }
   }
 
@@ -306,6 +329,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _signalingClient.stop();
     _webRtcService.stopAudioCapture();
+    unawaited(_disableWakeLock());
     super.dispose();
   }
 }
