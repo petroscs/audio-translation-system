@@ -151,7 +151,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
-app.UseHttpsRedirection();
+// Only redirect to HTTPS when HTTPS is configured (skip in Docker when using HTTP only)
+if ((app.Configuration["ASPNETCORE_URLS"] ?? "").Contains("https", StringComparison.OrdinalIgnoreCase))
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();

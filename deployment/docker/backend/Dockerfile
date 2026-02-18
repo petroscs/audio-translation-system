@@ -16,8 +16,8 @@ COPY ["backend/Backend.Infrastructure/Backend.Infrastructure.csproj", "backend/B
 # Restore dependencies
 RUN dotnet restore "backend/Backend.Api/Backend.Api.csproj"
 
-# Copy everything else and build
-COPY backend/ .
+# Copy everything else and build (preserve backend/ structure so paths match)
+COPY backend/ ./backend/
 WORKDIR "/src/backend/Backend.Api"
 RUN dotnet build "Backend.Api.csproj" -c Release -o /app/build
 

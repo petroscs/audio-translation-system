@@ -6,10 +6,10 @@ services:
     container_name: audio-translation-backend
     ports:
       - "5000:5000"
-      - "5001:5001"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:5000;https://+:5001
+      # HTTP only - no dev cert in Docker; use reverse proxy for TLS in production
+      - ASPNETCORE_URLS=http://+:5000
       - ConnectionStrings__DefaultConnection=Data Source=/data/audio_translation.db
       - Mediasoup__ApiUrl=http://mediasoup:4000
       - SttWorker__BaseUrl=http://stt-worker:5002
