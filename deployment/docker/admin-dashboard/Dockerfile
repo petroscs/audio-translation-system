@@ -5,6 +5,9 @@ WORKDIR /app
 # API URL for browser (build-time; e.g. http://localhost:5000)
 ARG VITE_API_URL=http://localhost:5000
 ENV VITE_API_URL=$VITE_API_URL
+# Listener web app URL for QR codes (e.g. http://localhost:3001)
+ARG VITE_LISTENER_BASE_URL=http://localhost:3001
+ENV VITE_LISTENER_BASE_URL=$VITE_LISTENER_BASE_URL
 
 # Copy package files
 COPY admin-dashboard/package*.json ./

@@ -142,7 +142,7 @@ export default function EventChannels() {
       {modal === 'create' && (
         <ModalBackdrop onClose={() => setModal(null)}>
           <ChannelForm
-            onSave={handleCreate}
+            onSave={async (body) => handleCreate(body as CreateChannelRequest)}
             onCancel={() => setModal(null)}
           />
         </ModalBackdrop>
@@ -161,7 +161,7 @@ export default function EventChannels() {
           <ConfirmModal
             title="Delete channel"
             message={`Delete channel "${modal.delete.name}"?`}
-            onConfirm={() => handleDelete(modal.delete.id)}
+            onConfirm={() => { void handleDelete(modal.delete.id); }}
             onCancel={() => setModal(null)}
           />
         </ModalBackdrop>
@@ -176,7 +176,7 @@ function ChannelForm({
   onCancel,
 }: {
   channel?: Channel;
-  onSave: (body: CreateChannelRequest | UpdateChannelRequest) => Promise<{ ok: boolean; error?: string }>;
+  onSave: (body: CreateChannelRequest | UpdateChannelRequest) => Promise<{ ok: boolean; error?: string } | { data?: unknown; ok: true }>;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(channel?.name ?? '');

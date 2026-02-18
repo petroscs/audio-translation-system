@@ -22,6 +22,10 @@
 > npm run dev
 
 
+> cd audio-translation-system\web-listener
+> npm run dev
+
+
 
 
 

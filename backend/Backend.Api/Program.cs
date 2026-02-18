@@ -61,6 +61,7 @@ builder.Services.Configure<MediasoupSettings>(builder.Configuration.GetSection("
 builder.Services.Configure<SttWorkerSettings>(builder.Configuration.GetSection("SttWorker"));
 builder.Services.Configure<RecordingWorkerSettings>(builder.Configuration.GetSection("RecordingWorker"));
 builder.Services.Configure<RecordingsSettings>(builder.Configuration.GetSection("Recordings"));
+builder.Services.Configure<ListenSettings>(builder.Configuration.GetSection("Listen"));
 
 var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>() ?? new JwtSettings();
 if (string.IsNullOrWhiteSpace(jwtSettings.Secret))
@@ -106,6 +107,7 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IChannelService, ChannelService>();
 builder.Services.AddScoped<ISessionService, SessionService>();
+builder.Services.AddScoped<IListenService, ListenService>();
 builder.Services.AddScoped<ISignalingService, SignalingService>();
 builder.Services.AddScoped<ICaptionService, CaptionService>();
 builder.Services.AddScoped<IRecordingService, RecordingService>();
@@ -120,7 +122,7 @@ builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
     {
         policy.WithOrigins(
-                builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? new[] { "http://localhost:3000" })
+                builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? new[] { "http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001" })
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();

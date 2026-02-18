@@ -13,10 +13,12 @@ public sealed class SignalingHub : Hub
 {
     private static readonly ConcurrentDictionary<string, Guid> ConnectionSessions = new();
     private readonly ISignalingService _signalingService;
+    private readonly ISessionService _sessionService;
 
-    public SignalingHub(ISignalingService signalingService)
+    public SignalingHub(ISignalingService signalingService, ISessionService sessionService)
     {
         _signalingService = signalingService;
+        _sessionService = sessionService;
     }
 
     public async Task<TransportCreatedResponse> CreateTransport(CreateTransportRequest request)
@@ -225,10 +227,18 @@ public sealed class SignalingHub : Hub
         return Task.FromResult("pong");
     }
 
-    public override Task OnDisconnectedAsync(Exception? exception)
+    public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        ConnectionSessions.TryRemove(Context.ConnectionId, out _);
-        return base.OnDisconnectedAsync(exception);
+        if (ConnectionSessions.TryRemove(Context.ConnectionId, out var sessionId))
+        {
+            var session = await _sessionService.GetByIdAsync(sessionId, Context.ConnectionAborted);
+            if (session is not null && session.Status == SessionStatus.Active && session.Role == SessionRole.Listener)
+            {
+                await _sessionService.EndAsync(sessionId, Context.ConnectionAborted);
+            }
+        }
+
+        await base.OnDisconnectedAsync(exception);
     }
 
     private Guid? GetUserId()

@@ -19,6 +19,11 @@ public interface ISessionService
         SessionRole role,
         CancellationToken cancellationToken);
     Task<Session?> EndAsync(Guid id, CancellationToken cancellationToken);
+    /// <summary>
+    /// Ends all active listener sessions that were consuming from the given broadcast (translator) session.
+    /// Called from a fresh scope when a translator session ends so DbContext is valid.
+    /// </summary>
+    Task EndListenerSessionsForBroadcastAsync(Guid broadcastSessionId, CancellationToken cancellationToken);
     Task PauseBroadcastAsync(Guid sessionId, CancellationToken cancellationToken = default);
     Task<SessionActiveProducerResult?> GetActiveProducerJoinInfoAsync(Guid sessionId, CancellationToken cancellationToken);
 }

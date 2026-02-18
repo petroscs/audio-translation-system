@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import type { Session } from '../api/types';
 import * as sessionsApi from '../api/sessions';
 import * as eventsApi from '../api/events';
+import { getBaseUrl } from '../api/client';
 
 export default function Sessions() {
   const [list, setList] = useState<Session[]>([]);
@@ -12,6 +13,7 @@ export default function Sessions() {
   const [eventId, setEventId] = useState<string>('');
   const [events, setEvents] = useState<{ id: string; name: string }[]>([]);
   const [detail, setDetail] = useState<Session | null>(null);
+  const [listenerBaseUrl, setListenerBaseUrl] = useState<string | null>(null);
 
   const loadEvents = async () => {
     const res = await eventsApi.getEvents();
@@ -43,6 +45,30 @@ export default function Sessions() {
   useEffect(() => {
     load();
   }, [filterStatus, eventId]);
+
+  const envListenerBase = import.meta.env.VITE_LISTENER_BASE_URL
+    ? String(import.meta.env.VITE_LISTENER_BASE_URL).replace(/\/$/, '')
+    : '';
+  const useLocalhost = !envListenerBase || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(envListenerBase);
+
+  useEffect(() => {
+    if (!useLocalhost) return;
+    let cancelled = false;
+    (async () => {
+      const base = getBaseUrl();
+      const url = `${base || ''}/api/listen/base-url`;
+      try {
+        const res = await fetch(url);
+        if (!cancelled && res.ok) {
+          const data = await res.json();
+          if (data?.listenerBaseUrl) setListenerBaseUrl(String(data.listenerBaseUrl).replace(/\/$/, ''));
+        }
+      } catch {
+        // keep listenerBaseUrl null; fallback will use window.location.origin
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [useLocalhost]);
 
   const handleEndSession = async (id: string) => {
     const res = await sessionsApi.endSession(id);
@@ -156,8 +182,18 @@ export default function Sessions() {
             )}
           </dl>
           <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-            <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', color: '#64748b' }}>Listeners: scan to join</p>
-            <QRCodeSVG value={detail.id} size={160} level="M" />
+            <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', color: '#64748b' }}>Listeners: scan to join (web or app)</p>
+            <QRCodeSVG
+              value={
+                !useLocalhost && envListenerBase
+                  ? `${envListenerBase}/listen/${detail.id}`
+                  : listenerBaseUrl
+                    ? `${listenerBaseUrl}/listen/${detail.id}`
+                    : `${window.location.origin}/listen/${detail.id}`
+              }
+              size={160}
+              level="M"
+            />
           </div>
           <div style={{ marginTop: '1rem', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             {detail.status === 'Active' && (

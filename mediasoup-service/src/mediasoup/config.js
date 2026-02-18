@@ -3,7 +3,24 @@ const os = require("os");
 const cpuCount = os.cpus().length;
 
 const listenIp = process.env.MEDIASOUP_LISTEN_IP || "0.0.0.0";
-const announcedIp = process.env.MEDIASOUP_ANNOUNCED_IP || "127.0.0.1";
+
+// Resolve announced IP: clients (mobile/emulator) must reach mediasoup at this address.
+// 127.0.0.1 fails for emulator and physical devices; use LAN IP when not explicitly set.
+function resolveAnnouncedIp() {
+  if (process.env.MEDIASOUP_ANNOUNCED_IP) {
+    return process.env.MEDIASOUP_ANNOUNCED_IP.trim();
+  }
+  const nets = os.networkInterfaces();
+  for (const addrs of Object.values(nets)) {
+    for (const addr of addrs) {
+      if (!addr.internal && addr.family === "IPv4") {
+        return addr.address;
+      }
+    }
+  }
+  return "127.0.0.1";
+}
+const announcedIp = resolveAnnouncedIp();
 
 const rtcMinPort = Number.parseInt(process.env.MEDIASOUP_RTC_MIN_PORT || "40000", 10);
 const rtcMaxPort = Number.parseInt(process.env.MEDIASOUP_RTC_MAX_PORT || "49999", 10);

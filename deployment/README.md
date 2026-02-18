@@ -44,6 +44,7 @@ This directory contains Docker configuration files for deploying the Audio Trans
 | STT Worker | 5002 | Speech-to-Text API |
 | Recording Worker | 5003 | Recording API |
 | Admin Dashboard | 3000 | Web Admin Interface |
+| Web Listener | 3001 | Anonymous listen (QR/link); same QR works for native listener app |
 
 ## Volumes
 

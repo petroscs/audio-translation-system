@@ -119,7 +119,7 @@ export default function Users() {
         <UserForm
           key={`create-${formKey}`}
           user={undefined}
-          onSave={handleCreate}
+          onSave={async (body) => handleCreate(body as CreateUserRequest)}
           onCancel={() => setModal(null)}
         />
       )}
@@ -135,7 +135,7 @@ export default function Users() {
         <ConfirmModal
           title="Delete user"
           message={`Delete user "${modal.delete.username}"? This cannot be undone.`}
-          onConfirm={() => handleDelete(modal.delete.id)}
+          onConfirm={() => { void handleDelete(modal.delete.id); }}
           onCancel={() => setModal(null)}
         />
       )}
@@ -149,7 +149,7 @@ function UserForm({
   onCancel,
 }: {
   user?: User;
-  onSave: (body: CreateUserRequest | UpdateUserRequest) => Promise<{ ok: boolean; error?: string }>;
+  onSave: (body: CreateUserRequest | UpdateUserRequest) => Promise<{ ok: boolean; error?: string } | { data?: unknown; ok: true }>;
   onCancel: () => void;
 }) {
   const isEdit = !!user;

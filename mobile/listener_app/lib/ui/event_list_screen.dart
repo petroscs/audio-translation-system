@@ -89,14 +89,18 @@ class _EventListScreenState extends State<EventListScreen> {
     }
   }
 
-  /// Extract session ID from a raw GUID string or a URL like
-  /// `listenerapp://session/{id}`.
+  /// Extract session ID from a raw GUID string or a URL:
+  /// - listenerapp://session/{id}
+  /// - https://.../listen/{id} (same QR as web listener)
   String? _parseSessionId(String raw) {
     final trimmed = raw.trim();
-    // Try URL format: scheme://session/{id}
     final uri = Uri.tryParse(trimmed);
-    if (uri != null && uri.pathSegments.length >= 2 && uri.pathSegments[0] == 'session') {
-      return uri.pathSegments[1];
+    if (uri != null && uri.pathSegments.length >= 2) {
+      if (uri.pathSegments[0] == 'session') return uri.pathSegments[1];
+      // Web listener URL: .../listen/{sessionId}
+      if (uri.pathSegments[uri.pathSegments.length - 2] == 'listen') {
+        return uri.pathSegments.last;
+      }
     }
     // Otherwise treat entire string as the session ID (raw GUID)
     return trimmed;

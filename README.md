@@ -12,6 +12,7 @@ audio-translation-system/
 │   ├── translator_app/         # Translator Mobile App
 │   └── listener_app/           # Listener Mobile App
 ├── admin-dashboard/            # Web Admin Dashboard (React + Vite)
+├── web-listener/               # Web Listener SPA (anonymous listen via QR/link)
 ├── database/                   # PostgreSQL schema & scripts
 ├── deployment/                 # Docker & deployment config
 ├── tests/                      # Integration, load, network, security, stress tests
@@ -185,7 +186,8 @@ deployment/
 │   ├── mediasoup/             # mediasoup Dockerfile
 │   ├── stt-worker/            # STT Worker Dockerfile
 │   ├── recording-worker/     # Recording Worker Dockerfile
-│   └── admin-dashboard/      # Admin Dashboard Dockerfile + nginx.conf
+│   ├── admin-dashboard/      # Admin Dashboard Dockerfile + nginx.conf
+│   └── web-listener/          # Web Listener Dockerfile + nginx.conf
 ├── docker-compose.yml
 ├── .env.example
 ├── .dockerignore

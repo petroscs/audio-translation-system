@@ -12,6 +12,14 @@ as a Listener session.
 - Default API base URL: `http://10.0.2.2:5000`
 - Override with: `flutter run --dart-define=API_BASE_URL=http://<host>:5000`
 
+## Joining a session (QR code or URL)
+
+You can join by scanning a QR code (in-app) or pasting a session ID/URL. The **same QR code** works for both this app and the [web listener](../../web-listener): when the translator or admin dashboard shows a QR that encodes a full URL (e.g. `https://listener.example.com/listen/{sessionId}`), opening it in a browser uses the web listener; scanning it in this app (or pasting that URL in the session ID field) joins with the native app. Supported formats:
+
+- **Raw session ID** — UUID only (e.g. from an older QR)
+- **Web listener URL** — `https://.../listen/{sessionId}` (same QR as web listener)
+- **Custom scheme** — `listenerapp://session/{id}` (if used elsewhere)
+
 ## Logs
 - **When you run from a terminal** (`flutter run -d windows` or `flutter run -d <device>`):  
   All `debugPrint` output and error stack traces appear in that same terminal.

@@ -1,10 +1,12 @@
 # mediasoup Service Dockerfile
-FROM node:20-alpine AS base
+# mediasoup@3.19+ requires Node >= 22
+FROM node:22-alpine AS base
 WORKDIR /app
 
-# Install dependencies for mediasoup
+# Install dependencies for mediasoup (worker build from source when prebuilt fails in Alpine)
 RUN apk add --no-cache \
     python3 \
+    py3-pip \
     make \
     g++
 
@@ -15,7 +17,7 @@ WORKDIR /app
 COPY mediasoup-service/package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Copy source code
 COPY mediasoup-service/ .

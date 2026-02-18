@@ -11,6 +11,7 @@ as a Translator session.
 ## Configuration
 - Default API base URL: `http://10.0.2.2:5000`
 - Override with: `flutter run --dart-define=API_BASE_URL=http://<host>:5000`
+- **Listener QR URL:** The QR code shown while broadcasting always encodes the full web listener URL (e.g. `https://listener.example.com/listen/{sessionId}`). Default base URL is `http://localhost:3001`. For production or when the web listener is elsewhere, set: `flutter run --dart-define=LISTENER_WEB_BASE_URL=https://<listener-host>`.
 
 ## Logs
 - **When you run from a terminal** (`flutter run -d windows` or `flutter run -d <device>`):  

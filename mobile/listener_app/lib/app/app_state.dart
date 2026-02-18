@@ -407,8 +407,7 @@ class AppState extends ChangeNotifier {
     // Only stop on detached (app being destroyed).
     // On desktop, 'inactive' fires on window focus loss — must NOT kill the connection.
     if (state == AppLifecycleState.detached) {
-      _signalingClient.stop();
-      unawaited(_disableWakeLock());
+      unawaited(stopListening());
     }
   }
 

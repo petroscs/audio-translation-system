@@ -4,6 +4,7 @@ using Backend.Models.Enums;
 using Backend.Services.Interfaces;
 using Backend.Services.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Backend.Services.Services;
 
@@ -12,12 +13,18 @@ public sealed class SessionService : ISessionService
     private readonly AppDbContext _dbContext;
     private readonly ISttWorkerService _sttWorkerService;
     private readonly IRecordingWorkerService _recordingWorkerService;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public SessionService(AppDbContext dbContext, ISttWorkerService sttWorkerService, IRecordingWorkerService recordingWorkerService)
+    public SessionService(
+        AppDbContext dbContext,
+        ISttWorkerService sttWorkerService,
+        IRecordingWorkerService recordingWorkerService,
+        IServiceScopeFactory scopeFactory)
     {
         _dbContext = dbContext;
         _sttWorkerService = sttWorkerService;
         _recordingWorkerService = recordingWorkerService;
+        _scopeFactory = scopeFactory;
     }
 
     public async Task<IReadOnlyList<Session>> GetAsync(
@@ -107,6 +114,8 @@ public sealed class SessionService : ISessionService
             return null;
         }
 
+        var wasTranslatorSession = entity.Role == SessionRole.Translator;
+
         entity.Status = SessionStatus.Ended;
         entity.EndedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -135,7 +144,67 @@ public sealed class SessionService : ISessionService
             }
         });
 
+        // When a translator (broadcast) session ends, end all listener sessions that were consuming from it.
+        // Use a new scope so the background task has its own DbContext (request scope is disposed after return).
+        if (wasTranslatorSession)
+        {
+            var broadcastSessionId = id;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var sessionService = scope.ServiceProvider.GetRequiredService<ISessionService>();
+                    await sessionService.EndListenerSessionsForBroadcastAsync(broadcastSessionId, CancellationToken.None);
+                }
+                catch
+                {
+                    // Best effort; ignore failures
+                }
+            });
+        }
+
         return entity;
+    }
+
+    /// <inheritdoc />
+    public async Task EndListenerSessionsForBroadcastAsync(Guid broadcastSessionId, CancellationToken cancellationToken)
+    {
+        var producerIds = await _dbContext.Producers
+            .Where(p => p.SessionId == broadcastSessionId)
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+
+        if (producerIds.Count == 0)
+        {
+            return;
+        }
+
+        var listenerSessionIds = await _dbContext.Consumers
+            .Where(c => producerIds.Contains(c.ProducerId))
+            .Select(c => c.SessionId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        foreach (var listenerSessionId in listenerSessionIds)
+        {
+            if (listenerSessionId == broadcastSessionId)
+            {
+                continue;
+            }
+
+            var listener = await _dbContext.Sessions
+                .FirstOrDefaultAsync(
+                    s => s.Id == listenerSessionId
+                        && s.Role == SessionRole.Listener
+                        && s.Status == SessionStatus.Active,
+                    cancellationToken);
+
+            if (listener is not null)
+            {
+                await EndAsync(listenerSessionId, cancellationToken);
+            }
+        }
     }
 
     public async Task PauseBroadcastAsync(Guid sessionId, CancellationToken cancellationToken = default)

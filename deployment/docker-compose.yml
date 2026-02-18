@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build:
@@ -103,9 +101,25 @@ services:
       dockerfile: deployment/docker/admin-dashboard/Dockerfile
       args:
         VITE_API_URL: ${API_URL:-http://localhost:5000}
+        VITE_LISTENER_BASE_URL: ${LISTENER_URL:-http://localhost:3001}
     container_name: audio-translation-admin-dashboard
     ports:
       - "3000:3000"
+    networks:
+      - audio-translation-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  web-listener:
+    build:
+      context: ..
+      dockerfile: deployment/docker/web-listener/Dockerfile
+      args:
+        VITE_API_URL: ${API_URL:-http://localhost:5000}
+    container_name: audio-translation-web-listener
+    ports:
+      - "3001:3001"
     networks:
       - audio-translation-network
     depends_on:

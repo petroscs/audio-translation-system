@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../app/app_state.dart';
+import '../config/api_config.dart';
 import 'audio_level_indicator.dart';
 
 class TranslatorDashboard extends StatefulWidget {
@@ -131,7 +132,7 @@ class _TranslatorDashboardState extends State<TranslatorDashboard> {
               const SizedBox(height: 8),
               Center(
                 child: QrImageView(
-                  data: session.id,
+                  data: ApiConfig.listenUrl(session.id),
                   version: QrVersions.auto,
                   size: 160,
                 ),

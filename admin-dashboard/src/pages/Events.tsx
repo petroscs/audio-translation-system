@@ -148,7 +148,7 @@ export default function Events() {
       )}
       {modal === 'create' && (
         <EventForm
-          onSave={handleCreate}
+          onSave={async (body) => handleCreate(body as CreateEventRequest)}
           onCancel={() => setModal(null)}
         />
       )}
@@ -163,7 +163,7 @@ export default function Events() {
         <ConfirmModal
           title="Delete event"
           message={`Delete event "${modal.delete.name}"? This cannot be undone.`}
-          onConfirm={() => handleDelete(modal.delete.id)}
+          onConfirm={() => { void handleDelete(modal.delete.id); }}
           onCancel={() => setModal(null)}
         />
       )}
@@ -177,7 +177,7 @@ function EventForm({
   onCancel,
 }: {
   event?: Event;
-  onSave: (body: CreateEventRequest | UpdateEventRequest) => Promise<{ ok: boolean; error?: string }>;
+  onSave: (body: CreateEventRequest | UpdateEventRequest) => Promise<{ ok: boolean; error?: string } | { data?: unknown; ok: true }>;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(evt?.name ?? '');

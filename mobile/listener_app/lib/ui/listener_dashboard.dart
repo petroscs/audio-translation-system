@@ -23,18 +23,31 @@ class _ListenerDashboardState extends State<ListenerDashboard> {
     super.dispose();
   }
 
-  /// Extract session ID from a raw GUID or URL like listenerapp://session/{id}.
+  /// Extract session ID from a raw GUID or URL:
+  /// - listenerapp://session/{id}
+  /// - https://.../listen/{id} (same QR as web listener)
   static String? _parseSessionId(String raw) {
     final trimmed = raw.trim();
     final uri = Uri.tryParse(trimmed);
-    if (uri != null && uri.pathSegments.length >= 2 && uri.pathSegments[0] == 'session') {
-      return uri.pathSegments[1];
+    if (uri != null && uri.pathSegments.length >= 2) {
+      if (uri.pathSegments[0] == 'session') return uri.pathSegments[1];
+      // Web listener URL: .../listen/{sessionId}
+      if (uri.pathSegments[uri.pathSegments.length - 2] == 'listen') {
+        return uri.pathSegments.last;
+      }
     }
     return trimmed;
   }
 
   Future<void> _joinBySessionId(BuildContext context, AppState appState) async {
-    await appState.startListeningBySessionId(_sessionIdController.text.trim());
+    final sessionId = _parseSessionId(_sessionIdController.text);
+    if (sessionId == null || sessionId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter or paste a session ID or listen URL')),
+      );
+      return;
+    }
+    await appState.startListeningBySessionId(sessionId);
     if (!context.mounted) return;
     if (appState.errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(

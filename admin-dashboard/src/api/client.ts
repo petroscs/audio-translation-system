@@ -6,18 +6,15 @@ const getBaseUrl = (): string => {
 
 let accessToken: string | null = null;
 let refreshToken: string | null = null;
-let expiresAt: number | null = null;
 
-export function setTokens(access: string, refresh: string, expiresAtMs: number): void {
+export function setTokens(access: string, refresh: string, _expiresAtMs: number): void {
   accessToken = access;
   refreshToken = refresh;
-  expiresAt = expiresAtMs;
 }
 
 export function clearTokens(): void {
   accessToken = null;
   refreshToken = null;
-  expiresAt = null;
 }
 
 export function getAccessToken(): string | null {
@@ -62,7 +59,6 @@ async function fetchWithAuth(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   const opts = { ...init, headers: new Headers(init?.headers) };
   const token = getAccessToken();
   if (token) opts.headers.set('Authorization', `Bearer ${token}`);
