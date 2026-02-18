@@ -168,6 +168,33 @@ admin-dashboard/
 
 ---
 
+## Web Listener (React + Vite)
+
+Browser-based listener for live translation sessions. Listeners join by scanning a QR code or opening a link—**no app install or login required**. Same QR from the admin dashboard (Sessions page) or translator app works for the web listener and the native listener app.
+
+**Features:** Anonymous access, real-time audio via WebRTC (mediasoup), live captions, mobile-friendly.
+
+```
+web-listener/
+├── src/
+│   ├── api/                   # API client & config
+│   ├── pages/                 # Listen (join session, audio + captions)
+│   ├── webrtc/                # WebRTC/mediasoup receive, audio playback
+│   ├── App.tsx
+│   ├── main.tsx
+│   └── index.css
+├── index.html
+├── vite.config.ts
+├── tsconfig.json
+└── package.json
+```
+
+**Quick start (dev):** From project root, `cd web-listener`, `npm install`, `npm run dev`. Open http://localhost:3001. Listen at `/listen/{sessionId}` or use `?session={sessionId}`. The dev server binds to all interfaces so you can use your machine’s IP (e.g. `http://192.168.178.82:3001`) for QR codes on the same network.
+
+**Config:** Set `VITE_API_URL` to the backend base URL when the app is not served from the same origin (e.g. `VITE_API_URL=http://localhost:5000`). See **web-listener/README.md** for full setup, URL structure, Docker, and troubleshooting.
+
+---
+
 ## Database
 
 ```

@@ -4,6 +4,7 @@ using Backend.Models.Enums;
 using Backend.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Api.Controllers;
 
@@ -93,8 +94,15 @@ public sealed class UsersController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        var removed = await _userService.DeleteAsync(id, cancellationToken);
-        return removed ? NoContent() : NotFound();
+        try
+        {
+            var removed = await _userService.DeleteAsync(id, cancellationToken);
+            return removed ? NoContent() : NotFound();
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict("Cannot delete user because related data exists (e.g. sessions or events). Remove those first, then retry.");
+        }
     }
 
     private Guid? GetCurrentUserId()

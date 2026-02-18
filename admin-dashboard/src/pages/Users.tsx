@@ -132,12 +132,17 @@ export default function Users() {
         />
       )}
       {modal && typeof modal === 'object' && 'delete' in modal && (
-        <ConfirmModal
-          title="Delete user"
-          message={`Delete user "${modal.delete.username}"? This cannot be undone.`}
-          onConfirm={() => { void handleDelete(modal.delete.id); }}
-          onCancel={() => setModal(null)}
-        />
+        <ModalBackdrop onClose={() => setModal(null)}>
+          <ConfirmModal
+            title="Delete user"
+            message={`Delete user "${modal.delete.username}"? This cannot be undone.`}
+            onConfirm={async () => {
+              const res = await handleDelete(modal.delete.id);
+              if (!res.ok) return { ok: false as const, error: res.error };
+            }}
+            onCancel={() => setModal(null)}
+          />
+        </ModalBackdrop>
       )}
     </div>
   );
@@ -260,6 +265,28 @@ function UserForm({
   );
 }
 
+function ModalBackdrop({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1000,
+        background: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && onClose) onClose();
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function ConfirmModal({
   title,
   message,
@@ -268,21 +295,30 @@ function ConfirmModal({
 }: {
   title: string;
   message: string;
-  onConfirm: () => void | Promise<void>;
+  onConfirm: () => void | Promise<void | { ok: false; error?: string }>;
   onCancel: () => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const handleConfirm = async () => {
+    setError('');
     setLoading(true);
-    await onConfirm();
-    setLoading(false);
+    try {
+      const result = await onConfirm();
+      if (result && typeof result === 'object' && !result.ok) {
+        setError(result.error ?? 'Failed to delete');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
   return (
-    <div className="card" style={{ position: 'fixed', top: 40, left: '50%', transform: 'translateX(-50%)', zIndex: 100, minWidth: 320 }}>
+    <div className="card" style={{ position: 'relative', minWidth: 320 }} onClick={(e) => e.stopPropagation()}>
       <h2 style={{ marginTop: 0 }}>{title}</h2>
       <p>{message}</p>
+      {error && <div className="alert alert-error">{error}</div>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
+        <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={loading}>
           Cancel
         </button>
         <button type="button" className="btn btn-danger" onClick={handleConfirm} disabled={loading}>

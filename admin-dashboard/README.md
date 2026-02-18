@@ -15,7 +15,10 @@ npm install
 npm run dev
 ```
 
-Runs at http://localhost:3000. In dev, API requests are proxied to the backend (see `vite.config.ts`). Set `VITE_API_URL` if the backend runs elsewhere (e.g. `VITE_API_URL=http://localhost:5000`).
+Runs at http://localhost:3000 and is also reachable on your LAN at http://\<your-IP\>:3000 (e.g. http://192.168.178.82:3000). In dev, API requests are proxied to the backend (see `vite.config.ts`). Set `VITE_API_URL` if the backend runs elsewhere (e.g. `VITE_API_URL=http://localhost:5000`).
+
+**If you can't open the dashboard by IP:** Windows Firewall may be blocking port 3000. Run PowerShell as Administrator and allow it:  
+`New-NetFirewallRule -DisplayName "Admin Dashboard (3000)" -Direction Inbound -LocalPort 3000 -Protocol TCP -Action Allow`
 
 ## Build
 

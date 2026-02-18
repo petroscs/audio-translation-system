@@ -126,6 +126,17 @@ public sealed class UserService : IUserService
             return false;
         }
 
+        // Sessions reference users with DeleteBehavior.Restrict. Delete the user's sessions first so the user can be removed.
+        // Session children (recordings/captions/transports/consumers/producers) are configured to cascade on session delete.
+        var sessions = await _dbContext.Sessions
+            .Where(s => s.UserId == id)
+            .ToListAsync(cancellationToken);
+        if (sessions.Count > 0)
+        {
+            _dbContext.Sessions.RemoveRange(sessions);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
         _dbContext.Users.Remove(userEntity);
         await _dbContext.SaveChangesAsync(cancellationToken);
         return true;

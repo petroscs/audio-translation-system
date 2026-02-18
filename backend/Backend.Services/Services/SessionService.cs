@@ -205,6 +205,42 @@ public sealed class SessionService : ISessionService
                 await EndAsync(listenerSessionId, cancellationToken);
             }
         }
+
+        // Delete guest users (and their listener sessions) created for this broadcast to avoid user table bloat.
+        // Guest users are created by ListenService.JoinAsync with Role=Listener and Email ending with "@anonymous".
+        var listenerUserIds = await _dbContext.Sessions
+            .Where(s => listenerSessionIds.Contains(s.Id))
+            .Select(s => s.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (listenerUserIds.Count == 0)
+        {
+            return;
+        }
+
+        var guestUserIds = await _dbContext.Users
+            .Where(u => listenerUserIds.Contains(u.Id)
+                && u.Role == UserRole.Listener
+                && u.Email.EndsWith("@anonymous"))
+            .Select(u => u.Id)
+            .ToListAsync(cancellationToken);
+
+        if (guestUserIds.Count == 0)
+        {
+            return;
+        }
+
+        var guestSessionsToRemove = await _dbContext.Sessions
+            .Where(s => listenerSessionIds.Contains(s.Id) && guestUserIds.Contains(s.UserId))
+            .ToListAsync(cancellationToken);
+
+        _dbContext.Sessions.RemoveRange(guestSessionsToRemove);
+        var guestUsersToRemove = await _dbContext.Users
+            .Where(u => guestUserIds.Contains(u.Id))
+            .ToListAsync(cancellationToken);
+        _dbContext.Users.RemoveRange(guestUsersToRemove);
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task PauseBroadcastAsync(Guid sessionId, CancellationToken cancellationToken = default)
