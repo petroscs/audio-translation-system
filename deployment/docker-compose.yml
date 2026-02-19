@@ -11,7 +11,7 @@ services:
       # HTTP only - no dev cert in Docker; use reverse proxy for TLS in production
       - ASPNETCORE_URLS=http://+:5000
       - ConnectionStrings__DefaultConnection=Data Source=/data/audio_translation.db
-      - Mediasoup__ApiUrl=http://mediasoup:4000
+      - Mediasoup__BaseUrl=http://mediasoup:4000
       - SttWorker__BaseUrl=http://stt-worker:5002
       - SttWorker__ApiKey=${STT_WORKER_API_KEY:-stt-worker-secret}
       - RecordingWorker__BaseUrl=http://recording-worker:5003
