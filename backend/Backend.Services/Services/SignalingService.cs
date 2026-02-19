@@ -219,6 +219,17 @@ public sealed class SignalingService : ISignalingService
             throw new InvalidOperationException("Producer is not in the same channel.");
         }
 
+        // Verify producer still exists in mediasoup (e.g. broadcaster may have disconnected).
+        try
+        {
+            await _mediasoupService.GetProducerStatsAsync(producer.MediasoupProducerId, cancellationToken);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("NotFound", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The broadcaster may have stopped. Please refresh the listener page and try again when someone is broadcasting.");
+        }
+
         var consumerResult = await _mediasoupService.CreateConsumerAsync(
             transport.MediasoupTransportId,
             producer.MediasoupProducerId,

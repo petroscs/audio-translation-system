@@ -1,3 +1,5 @@
+const dns = require("dns").promises;
+const net = require("net");
 const { webRtcTransportOptions } = require("./config");
 
 const transportsById = new Map();
@@ -51,16 +53,28 @@ async function createPlainTransport({ router, routerId, sessionId }) {
   return transport;
 }
 
-function resolveIpToNumeric(ip) {
-  if (!ip || typeof ip !== 'string') return ip;
+/**
+ * Resolve hostname or special names to a numeric IP. mediasoup worker requires an IP, not a hostname.
+ */
+async function resolveIpToNumeric(ip) {
+  if (!ip || typeof ip !== "string") return ip;
   const trimmed = ip.trim().toLowerCase();
-  if (trimmed === 'localhost') return '127.0.0.1';
-  if (trimmed === '::1') return '127.0.0.1';
-  return ip;
+  if (trimmed === "localhost") return "127.0.0.1";
+  if (trimmed === "::1") return "127.0.0.1";
+  if (net.isIP(trimmed)) return trimmed;
+  const addresses = await dns.resolve4(trimmed);
+  if (!addresses || addresses.length === 0) {
+    throw new Error(`Could not resolve hostname to IP: ${ip}`);
+  }
+  return addresses[0];
 }
 
 async function connectPlainTransport(transportId, { ip, port }) {
-  const numericIp = resolveIpToNumeric(ip);
+  const numericIp = await resolveIpToNumeric(ip);
+  const numericPort = Number(port);
+  if (!Number.isInteger(numericPort) || numericPort <= 0 || numericPort > 65535) {
+    throw new Error(`Invalid port for plain transport connect: ${port}`);
+  }
   console.log(`[connectPlainTransport] Looking for transport: ${transportId}`);
   console.log(`[connectPlainTransport] Available transports:`, Array.from(transportsById.keys()));
   
@@ -69,10 +83,10 @@ async function connectPlainTransport(transportId, { ip, port }) {
     throw new Error(`Plain transport not found. TransportId: ${transportId}`);
   }
 
-  console.log(`[connectPlainTransport] Transport found, connecting to ${numericIp}:${port}`);
+  console.log(`[connectPlainTransport] Transport found, connecting to ${numericIp}:${numericPort} (resolved from ${ip})`);
   
   try {
-    await transport.connect({ ip: numericIp, port });
+    await transport.connect({ ip: numericIp, port: numericPort });
     console.log(`[connectPlainTransport] Transport connected successfully`);
     
     // Wait a bit for tuple to be available

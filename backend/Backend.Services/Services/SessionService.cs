@@ -144,24 +144,22 @@ public sealed class SessionService : ISessionService
             }
         });
 
-        // When a translator (broadcast) session ends, end all listener sessions that were consuming from it.
-        // Use a new scope so the background task has its own DbContext (request scope is disposed after return).
+        // When a translator (broadcast) session ends, end all listener sessions and remove guest users.
+        // Run synchronously (with a new scope) so cleanup completes before the response is sent;
+        // fire-and-forget Task.Run can be dropped in Docker/some hosts and never run.
         if (wasTranslatorSession)
         {
-            var broadcastSessionId = id;
-            _ = Task.Run(async () =>
+            try
             {
-                try
-                {
-                    using var scope = _scopeFactory.CreateScope();
-                    var sessionService = scope.ServiceProvider.GetRequiredService<ISessionService>();
-                    await sessionService.EndListenerSessionsForBroadcastAsync(broadcastSessionId, CancellationToken.None);
-                }
-                catch
-                {
-                    // Best effort; ignore failures
-                }
-            });
+                using var scope = _scopeFactory.CreateScope();
+                var sessionService = scope.ServiceProvider.GetRequiredService<ISessionService>();
+                await sessionService.EndListenerSessionsForBroadcastAsync(id, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // Log but do not fail the end-session response
+                // TODO: inject ILogger and log ex when available
+            }
         }
 
         return entity;

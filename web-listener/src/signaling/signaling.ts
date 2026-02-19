@@ -30,7 +30,13 @@ export class SignalingClient {
 
     const url = getSignalingUrl(this.accessToken);
     this.connection = new signalR.HubConnectionBuilder()
-      .withUrl(url, { withCredentials: true })
+      .withUrl(url, {
+        withCredentials: true,
+        // Skip the negotiate POST; connect via WebSocket only. Avoids "Failed to fetch" on
+        // some mobile browsers (e.g. Android) where the negotiate request fails.
+        skipNegotiation: true,
+        transport: signalR.HttpTransportType.WebSockets,
+      })
       .withAutomaticReconnect()
       .build();
 

@@ -49,10 +49,35 @@ export default function Sessions() {
   const envListenerBase = import.meta.env.VITE_LISTENER_BASE_URL
     ? String(import.meta.env.VITE_LISTENER_BASE_URL).replace(/\/$/, '')
     : '';
-  const useLocalhost = !envListenerBase || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(envListenerBase);
+  const envIsLan = envListenerBase && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(envListenerBase);
+
+  // Listener URL for QR: same host as current page, port 3001 (so scanning from phone gets LAN IP when dashboard is opened via http://192.168.x.x:3000)
+  const listenerBaseFromWindow =
+    typeof window !== 'undefined' && window.location?.hostname
+      ? `${window.location.protocol}//${window.location.hostname}:3001`
+      : '';
+
+  // Backend in Docker returns container IP (172.16–31.x); ignore that and use page host so QR has LAN IP
+  const isUsableForQr = (base: string | null) => {
+    if (!base) return false;
+    try {
+      const u = new URL(base);
+      const host = u.hostname.toLowerCase();
+      if (host === 'localhost' || host === '127.0.0.1') return false;
+      const parts = host.split('.');
+      if (parts[0] === '10') return false; // 10.0.0.0/8
+      if (parts[0] === '172') {
+        const second = parseInt(parts[1], 10);
+        if (second >= 16 && second <= 31) return false; // 172.16.0.0/12
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   useEffect(() => {
-    if (!useLocalhost) return;
+    if (envIsLan) return;
     let cancelled = false;
     (async () => {
       const base = getBaseUrl();
@@ -64,11 +89,11 @@ export default function Sessions() {
           if (data?.listenerBaseUrl) setListenerBaseUrl(String(data.listenerBaseUrl).replace(/\/$/, ''));
         }
       } catch {
-        // keep listenerBaseUrl null; fallback will use window.location.origin
+        // keep listenerBaseUrl null
       }
     })();
     return () => { cancelled = true; };
-  }, [useLocalhost]);
+  }, [envIsLan]);
 
   const handleEndSession = async (id: string) => {
     const res = await sessionsApi.endSession(id);
@@ -185,11 +210,13 @@ export default function Sessions() {
             <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', color: '#64748b' }}>Listeners: scan to join (web or app)</p>
             <QRCodeSVG
               value={
-                !useLocalhost && envListenerBase
+                envIsLan && envListenerBase
                   ? `${envListenerBase}/listen/${detail.id}`
-                  : listenerBaseUrl
-                    ? `${listenerBaseUrl}/listen/${detail.id}`
-                    : `${window.location.origin}/listen/${detail.id}`
+                  : listenerBaseFromWindow
+                    ? `${listenerBaseFromWindow}/listen/${detail.id}`
+                    : listenerBaseUrl && isUsableForQr(listenerBaseUrl)
+                      ? `${listenerBaseUrl}/listen/${detail.id}`
+                      : `${window.location.origin.replace(/:\d+$/, ':3001')}/listen/${detail.id}`
               }
               size={160}
               level="M"

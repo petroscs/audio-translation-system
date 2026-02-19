@@ -53,6 +53,18 @@ class AuthService {
   String? get accessToken => _tokens?.accessToken;
   String? get refreshToken => _tokens?.refreshToken;
 
+  /// Ensures tokens are loaded and returns a valid access token (refreshes if expired).
+  /// Use this before SignalR connect / in accessTokenFactory to avoid 401 on negotiate.
+  Future<String?> getValidAccessToken() async {
+    await loadTokens();
+    if (_tokens == null) return null;
+    if (_tokens!.isExpired) {
+      final refreshed = await refresh();
+      return refreshed?.accessToken;
+    }
+    return _tokens!.accessToken;
+  }
+
   Future<AuthTokens?> loadTokens() async {
     final accessToken = await _storage.read(key: 'accessToken');
     final refreshToken = await _storage.read(key: 'refreshToken');

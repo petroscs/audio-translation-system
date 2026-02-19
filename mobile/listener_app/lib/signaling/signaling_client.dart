@@ -19,11 +19,17 @@ class SignalingClient {
       return;
     }
 
+    // Ensure we have a valid token before connecting (avoids 401 on negotiate / reconnect)
+    final token = await _authService.getValidAccessToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Not logged in or session expired. Please log in again.');
+    }
+
     final connection = HubConnectionBuilder()
         .withUrl(
           ApiConfig.signalingUri().toString(),
           HttpConnectionOptions(
-            accessTokenFactory: () async => _authService.accessToken ?? '',
+            accessTokenFactory: () async => (await _authService.getValidAccessToken()) ?? '',
           ),
         )
         .withAutomaticReconnect()

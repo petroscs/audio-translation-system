@@ -59,7 +59,10 @@
 
 - Docker Desktop was installed but needs to be **started manually**
 - Services cannot be built yet until source code is implemented
-- Update `SERVER_IP` in `.env` to your actual server IP address
+- **Voice/WebRTC:** Set `SERVER_IP` to the IP address that translator and listener clients use to reach this host (e.g. your machine’s LAN IP like `192.168.1.x`). If clients run on the same machine as Docker, `127.0.0.1` is fine; otherwise voice will not transfer until `SERVER_IP` is set.
+- **Web listener (browser):** The web listener derives the API/SignalR URL at runtime from the page's host (same host, port 5000) when `VITE_API_URL` is not set. If you build with a specific API (e.g. for a different port), set `API_URL` when building: `API_URL=http://YOUR_IP:5000 docker-compose build web-listener`.
+- **Listener app (mobile):** The app uses `API_BASE_URL` at build time (default `http://10.0.2.2:5000` for Android emulator). For a real device or another host, build with: `flutter build apk --dart-define=API_BASE_URL=http://YOUR_SERVER_IP:5000` (and use the same value for the translator app if needed). Otherwise you may see "Failed to complete negotiation with the server: TypeError: Failed to fetch".
+- **LAN access (e.g. http://192.168.x.x:5000):** Ports are bound to `0.0.0.0` so the backend and web apps are reachable on your LAN IP. If you still cannot reach them from another device, allow inbound TCP (and UDP for 10000–10100) in **Windows Firewall** for the relevant ports (5000, 3000, 3001, 4000) or for "Docker Desktop".
 - Change `JWT_SECRET` to a secure random string
 
 ## Service Dependencies

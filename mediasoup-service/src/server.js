@@ -19,7 +19,7 @@ const {
   getTransportById,
   getTransportMeta
 } = require("./mediasoup/transports");
-const { createProducer, getProducerMeta, getProducerStats } = require("./mediasoup/producers");
+const { createProducer, getProducerMeta, getProducerStats, getProducerById } = require("./mediasoup/producers");
 const { createConsumer } = require("./mediasoup/consumers");
 const { workerCount } = require("./mediasoup/config");
 
@@ -234,7 +234,8 @@ function createServer() {
       }
 
       if (!producerMeta) {
-        res.status(404).json({ error: "Producer not found." });
+        console.warn(`[Consumer] Producer not found: producerId=${producerId} (broadcaster may have disconnected)`);
+        res.status(404).json({ error: "Producer not found. The broadcaster may have disconnected." });
         return;
       }
 
@@ -249,10 +250,39 @@ function createServer() {
         return;
       }
 
-      const parsedRtpCapabilities = parseJsonString(
-        rtpCapabilities,
-        rtpCapabilities ?? router.rtpCapabilities
-      );
+      // Prefer producer's consumableRtpParameters when available so router.canConsume() always
+      // passes (backend and some clients do not send rtpCapabilities). Fall back to client-sent
+      // caps or router.rtpCapabilities.
+      let parsedRtpCapabilities;
+      const producer = getProducerById(producerId);
+      const consumable = producer?.consumableRtpParameters;
+      const fromConsumable = consumable?.codecs?.length > 0;
+      if (fromConsumable) {
+        const c = consumable;
+        const producerKind = producer?.kind ?? 'audio';
+        parsedRtpCapabilities = {
+          codecs: (c.codecs || []).map((codec) => ({
+            mimeType: codec.mimeType,
+            clockRate: codec.clockRate,
+            channels: codec.channels,
+            parameters: codec.parameters || {},
+            rtcpFeedback: codec.rtcpFeedback || []
+          })),
+          headerExtensions: (c.headerExtensions || []).map((e) => ({
+            kind: producerKind,
+            uri: e.uri,
+            preferredId: typeof e.id === 'number' ? e.id : parseInt(e.id, 10) || 0,
+            preferredEncrypt: Boolean(e.encrypt),
+            direction: 'sendrecv'
+          }))
+        };
+      }
+      if (!fromConsumable) {
+        const clientSentCaps = rtpCapabilities && typeof rtpCapabilities === "object" && rtpCapabilities.codecs?.length;
+        parsedRtpCapabilities = clientSentCaps
+          ? parseJsonString(rtpCapabilities, rtpCapabilities)
+          : parseJsonString(rtpCapabilities, router.rtpCapabilities);
+      }
 
       const consumer = await createConsumer({
         transport,
