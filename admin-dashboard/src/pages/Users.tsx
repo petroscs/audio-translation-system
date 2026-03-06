@@ -7,12 +7,14 @@ export default function Users() {
   const [list, setList] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [modal, setModal] = useState<'create' | { edit: User } | { delete: User } | null>(null);
+  const [success, setSuccess] = useState('');
+  const [modal, setModal] = useState<'create' | 'deleteTemporary' | { edit: User } | { delete: User } | null>(null);
   const [formKey, setFormKey] = useState(0);
 
   const load = async () => {
     setLoading(true);
     setError('');
+    setSuccess('');
     const res = await usersApi.getUsers();
     if (!res.ok) {
       setError(res.status === 403 ? 'Admin access required' : res.error ?? 'Failed to load users');
@@ -58,18 +60,30 @@ export default function Users() {
     <div className="container">
       <h1 style={{ marginTop: 0 }}>Users</h1>
       {error && <div className="alert alert-error">{error}</div>}
+      {success && <div className="alert alert-success">{success}</div>}
       <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <p style={{ margin: 0, color: '#64748b' }}>Manage users and roles.</p>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() => {
-            setFormKey(k => k + 1);
-            setModal('create');
-          }}
-        >
-          Create user
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => setModal('deleteTemporary')}
+            disabled={loading}
+            title='Deletes guest/temporary users (email ending with "@anonymous").'
+          >
+            Delete temporary users
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              setFormKey((k) => k + 1);
+              setModal('create');
+            }}
+          >
+            Create user
+          </button>
+        </div>
       </div>
       {loading ? (
         <p>Loading...</p>
@@ -122,6 +136,22 @@ export default function Users() {
           onSave={async (body) => handleCreate(body as CreateUserRequest)}
           onCancel={() => setModal(null)}
         />
+      )}
+      {modal === 'deleteTemporary' && (
+        <ModalBackdrop onClose={() => setModal(null)}>
+          <ConfirmModal
+            title="Delete temporary users"
+            message='Delete all temporary (guest) users? This removes users with email ending in "@anonymous" and their sessions. This cannot be undone.'
+            onConfirm={async () => {
+              const res = await usersApi.deleteTemporaryUsers();
+              if (!res.ok) return { ok: false as const, error: res.error };
+              setModal(null);
+              setSuccess(`Deleted ${res.data.deletedCount} temporary user(s).`);
+              await load();
+            }}
+            onCancel={() => setModal(null)}
+          />
+        </ModalBackdrop>
       )}
       {modal && typeof modal === 'object' && 'edit' in modal && (
         <UserForm

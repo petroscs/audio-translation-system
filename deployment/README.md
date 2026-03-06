@@ -2,6 +2,8 @@
 
 This directory contains Docker configuration files for deploying the Audio Translation System.
 
+**New PC / demonstration setup:** See **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** for a full step-by-step guide (what you need, install, configure, first access, demo workflow, troubleshooting).
+
 ## Prerequisites
 
 - Docker Desktop installed and running
@@ -45,6 +47,7 @@ This directory contains Docker configuration files for deploying the Audio Trans
 | Recording Worker | 5003 | Recording API |
 | Admin Dashboard | 3000 | Web Admin Interface |
 | Web Listener | 3001 | Anonymous listen (QR/link); same QR works for native listener app |
+| Web Translator | 3002 (HTTPS) | Translator app in the browser (broadcast from PC); served over HTTPS so the microphone prompt works when opened via LAN IP |
 
 ## Volumes
 
@@ -69,6 +72,9 @@ This directory contains Docker configuration files for deploying the Audio Trans
 ### Docker Desktop not running
 - Start Docker Desktop application
 - Wait for it to fully start (whale icon in system tray)
+
+### Web translator (HTTPS)
+The web translator is served over **HTTPS** on port 3002 using a **self-signed certificate** (generated when the container starts). Open **https://localhost:3002** or **https://&lt;server-IP&gt;:3002** in your browser. The first time you visit, the browser will show a security warning (e.g. "Your connection is not private"); choose "Advanced" and "Proceed to …" to continue. After that, the microphone permission prompt will appear when you start broadcasting. For production, add the translator origin to backend `Cors:AllowedOrigins` (e.g. `https://192.168.178.82:3002`) or use a real certificate and update CORS accordingly.
 
 ### Port conflicts
 - Check if ports are already in use

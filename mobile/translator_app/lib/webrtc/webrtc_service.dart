@@ -1,7 +1,11 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:http/http.dart' as http;
+
+import '../utils/web_env.dart';
 
 /// Holds the real DTLS and RTP parameters extracted from the local PeerConnection.
 class MediasoupSendParams {
@@ -16,6 +20,36 @@ class WebRtcService {
   RTCIceConnectionState? _lastIceState;
   RTCPeerConnectionState? _lastConnectionState;
 
+  // #region agent log
+  static void _agentLog({
+    required String runId,
+    required String hypothesisId,
+    required String location,
+    required String message,
+    Map<String, Object?>? data,
+  }) {
+    try {
+      final payload = <String, Object?>{
+        'runId': runId,
+        'hypothesisId': hypothesisId,
+        'location': location,
+        'message': message,
+        'data': data ?? const <String, Object?>{},
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      };
+      unawaited(
+        http
+            .post(
+              Uri.parse('http://127.0.0.1:7243/ingest/f90e573a-a122-413a-8000-ba5f7c08740c'),
+              headers: const {'Content-Type': 'application/json'},
+              body: jsonEncode(payload),
+            )
+            .catchError((_) {}),
+      );
+    } catch (_) {}
+  }
+  // #endregion
+
   MediaStream? get localStream => _localStream;
   RTCPeerConnection? get peerConnection => _peerConnection;
 
@@ -27,25 +61,134 @@ class WebRtcService {
     }
 
     try {
+      // #region agent log
+      _agentLog(
+        runId: 'pre-fix',
+        hypothesisId: 'H1_secure_context_or_permissions',
+        location: 'webrtc_service.dart:startAudioCapture:env',
+        message: 'Starting audio capture (env snapshot)',
+        data: {
+          'kIsWeb': kIsWeb,
+          'platform': defaultTargetPlatform.toString(),
+          'href': WebEnv.href,
+          'origin': WebEnv.origin,
+          'isSecureContext': WebEnv.isSecureContext,
+          'hasMediaDevices': WebEnv.hasMediaDevices,
+          'userAgentPresent': (WebEnv.userAgent?.isNotEmpty ?? false),
+        },
+      );
+      _agentLog(
+        runId: 'pre-fix',
+        hypothesisId: 'H2_constraints_or_device',
+        location: 'webrtc_service.dart:startAudioCapture:constraints',
+        message: 'Calling getUserMedia with constraints',
+        data: {
+          'audio': true,
+          'video': false,
+        },
+      );
+      // #endregion
+
+      // Web: browsers only show the microphone permission prompt on secure origins
+      // (https:// or http://localhost). On http://192.168.x.x the prompt never appears.
+      if (kIsWeb) {
+        final isSecure = WebEnv.isSecureContext;
+        final hasMedia = WebEnv.hasMediaDevices;
+        if (isSecure == false || hasMedia == false) {
+          final origin = WebEnv.origin ?? 'this page';
+          throw Exception(
+            'Microphone is not available here. Browsers allow it only on secure connections (https://) or at http://localhost. '
+            'You are on $origin. Use https:// in the address bar, or open http://localhost:3002 on this device.',
+          );
+        }
+      }
+
       debugPrint('[WebRtcService] Requesting microphone access...');
-      final stream = await navigator.mediaDevices.getUserMedia({
-        'audio': true,
-        'video': false,
-      });
+      const constraints = <String, dynamic>{'audio': true, 'video': false};
+      MediaStream? stream;
+      Object? lastError;
+      StackTrace? lastStack;
+
+      for (int attempt = 1; attempt <= (kIsWeb ? 2 : 1); attempt++) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          lastError = null;
+          break;
+        } catch (e, st) {
+          lastError = e;
+          lastStack = st;
+          final msg = e.toString();
+          final isNullCheck = msg.contains('Null check operator used on a null value') ||
+              msg.contains('Unable to getUserMedia');
+          if (kIsWeb && attempt == 1 && isNullCheck) {
+            debugPrint('[WebRtcService] First getUserMedia attempt failed (web), retrying in 400ms: $e');
+            _agentLog(
+              runId: 'post-fix',
+              hypothesisId: 'H4_retry',
+              location: 'webrtc_service.dart:startAudioCapture:retry',
+              message: 'Retrying getUserMedia after null-check error',
+              data: {'error': msg, 'attempt': 1},
+            );
+            await Future<void>.delayed(const Duration(milliseconds: 400));
+            continue;
+          }
+          rethrow;
+        }
+      }
+
+      final MediaStream capturedStream;
+      if (stream != null) {
+        capturedStream = stream;
+      } else {
+        debugPrint('[WebRtcService] ERROR: getUserMedia returned null after retry');
+        throw Exception(
+          lastError != null
+              ? 'Microphone access failed: $lastError'
+              : 'Microphone access failed. Please allow microphone permission and try again.',
+        );
+      }
 
       debugPrint('[WebRtcService] Microphone access granted');
-      final audioTracks = stream.getAudioTracks();
+      // #region agent log
+      _agentLog(
+        runId: 'pre-fix',
+        hypothesisId: 'H2_constraints_or_device',
+        location: 'webrtc_service.dart:startAudioCapture:success',
+        message: 'getUserMedia succeeded',
+        data: {
+          'audioTracks': capturedStream.getAudioTracks().length,
+        },
+      );
+      // #endregion
+
+      final audioTracks = capturedStream.getAudioTracks();
       debugPrint('[WebRtcService] Audio tracks count: ${audioTracks.length}');
       if (audioTracks.isNotEmpty) {
         final track = audioTracks.first;
         debugPrint('[WebRtcService] Audio track ID: ${track.id}, enabled: ${track.enabled}');
       }
 
-      _localStream = stream;
-      return stream;
+      _localStream = capturedStream;
+      return capturedStream;
     } catch (e, stackTrace) {
       debugPrint('[WebRtcService] ERROR: Failed to start audio capture: $e');
       debugPrint('[WebRtcService] Stack trace: $stackTrace');
+      // #region agent log
+      _agentLog(
+        runId: 'pre-fix',
+        hypothesisId: 'H3_flutter_webrtc_null_bug',
+        location: 'webrtc_service.dart:startAudioCapture:catch',
+        message: 'getUserMedia threw',
+        data: {
+          'error': e.toString(),
+          'stackContainsNullCheck': stackTrace.toString().contains('Null check operator used on a null value'),
+          'href': WebEnv.href,
+          'origin': WebEnv.origin,
+          'isSecureContext': WebEnv.isSecureContext,
+          'hasMediaDevices': WebEnv.hasMediaDevices,
+        },
+      );
+      // #endregion
       rethrow;
     }
   }

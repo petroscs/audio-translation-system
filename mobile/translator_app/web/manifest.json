@@ -1,11 +1,11 @@
 {
-    "name": "translator_app",
-    "short_name": "translator_app",
+    "name": "Translator",
+    "short_name": "Translator",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Translator app for the audio translation system.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

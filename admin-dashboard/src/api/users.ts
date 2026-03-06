@@ -20,3 +20,7 @@ export async function updateUser(id: string, body: UpdateUserRequest) {
 export async function deleteUser(id: string) {
   return apiRequest<unknown>(`/api/users/${id}`, { method: 'DELETE' });
 }
+
+export async function deleteTemporaryUsers() {
+  return apiRequest<{ deletedCount: number }>(`/api/users/temporary`, { method: 'DELETE' });
+}

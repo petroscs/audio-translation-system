@@ -122,7 +122,7 @@ builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
     {
         var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-            ?? new[] { "http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001" };
+            ?? new[] { "http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "https://localhost:3002", "http://127.0.0.1:3000", "http://127.0.0.1:3001", "http://127.0.0.1:3002", "https://127.0.0.1:3002" };
         if (builder.Environment.IsDevelopment())
         {
             // In development, allow any origin so the dashboard works when accessed via IP (e.g. http://192.168.x.x:3000)

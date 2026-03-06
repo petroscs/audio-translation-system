@@ -17,4 +17,5 @@ public interface IUserService
         bool allowRoleChange,
         CancellationToken cancellationToken);
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
+    Task<int> DeleteTemporaryUsersAsync(CancellationToken cancellationToken);
 }

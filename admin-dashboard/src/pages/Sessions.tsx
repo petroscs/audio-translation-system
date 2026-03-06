@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import type { Session } from '../api/types';
+import type { Session, SessionRole } from '../api/types';
 import * as sessionsApi from '../api/sessions';
 import * as eventsApi from '../api/events';
 import { getBaseUrl } from '../api/client';
@@ -10,6 +10,7 @@ export default function Sessions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('Active');
+  const [filterRole, setFilterRole] = useState<SessionRole | ''>('');
   const [eventId, setEventId] = useState<string>('');
   const [events, setEvents] = useState<{ id: string; name: string }[]>([]);
   const [detail, setDetail] = useState<Session | null>(null);
@@ -104,8 +105,10 @@ export default function Sessions() {
     return res;
   };
 
+  const visibleList = filterRole ? list.filter((s) => s.role === filterRole) : list;
+
   return (
-    <div className="container">
+    <div className="container container--wide">
       <h1 style={{ marginTop: 0 }}>Sessions</h1>
       {error && <div className="alert alert-error">{error}</div>}
       <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -116,6 +119,14 @@ export default function Sessions() {
             <option value="Active">Active</option>
             <option value="Ended">Ended</option>
             <option value="Disconnected">Disconnected</option>
+          </select>
+        </div>
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label>Role</label>
+          <select value={filterRole} onChange={(e) => setFilterRole(e.target.value as SessionRole | '')}>
+            <option value="">All roles</option>
+            <option value="Translator">Translator</option>
+            <option value="Listener">Listener</option>
           </select>
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -146,12 +157,12 @@ export default function Sessions() {
               </tr>
             </thead>
             <tbody>
-              {list.map((s) => (
+              {visibleList.map((s) => (
                 <tr key={s.id}>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{s.id.slice(0, 8)}…</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{s.userId.slice(0, 8)}…</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{s.eventId.slice(0, 8)}…</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{s.channelId.slice(0, 8)}…</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{s.id}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{s.userId}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{s.eventId}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{s.channelId}</td>
                   <td>{s.role}</td>
                   <td>{s.status}</td>
                   <td>{new Date(s.startedAt).toLocaleString()}</td>
@@ -180,7 +191,7 @@ export default function Sessions() {
           </table>
         </div>
       )}
-      {list.length === 0 && !loading && <p style={{ color: '#64748b' }}>No sessions found.</p>}
+      {visibleList.length === 0 && !loading && <p style={{ color: '#64748b' }}>No sessions found.</p>}
       {detail && (
         <div className="card" style={{ position: 'fixed', top: 40, left: '50%', transform: 'translateX(-50%)', zIndex: 100, minWidth: 360, maxWidth: 480 }}>
           <h2 style={{ marginTop: 0 }}>Session detail</h2>

@@ -9,6 +9,7 @@ namespace Backend.Services.Services;
 public sealed class UserService : IUserService
 {
     private readonly AppDbContext _dbContext;
+    private const string TemporaryUserEmailSuffix = "@anonymous";
 
     public UserService(AppDbContext dbContext)
     {
@@ -140,5 +141,42 @@ public sealed class UserService : IUserService
         _dbContext.Users.Remove(userEntity);
         await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    public async Task<int> DeleteTemporaryUsersAsync(CancellationToken cancellationToken)
+    {
+        var tempUserIds = await _dbContext.Users
+            .AsNoTracking()
+            .Where(u => u.Role == UserRole.Listener && u.Email.EndsWith(TemporaryUserEmailSuffix))
+            .Select(u => u.Id)
+            .ToListAsync(cancellationToken);
+
+        if (tempUserIds.Count == 0)
+        {
+            return 0;
+        }
+
+        var sessionsToRemove = await _dbContext.Sessions
+            .Where(s => tempUserIds.Contains(s.UserId))
+            .ToListAsync(cancellationToken);
+
+        if (sessionsToRemove.Count > 0)
+        {
+            _dbContext.Sessions.RemoveRange(sessionsToRemove);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        var usersToRemove = await _dbContext.Users
+            .Where(u => tempUserIds.Contains(u.Id))
+            .ToListAsync(cancellationToken);
+
+        if (usersToRemove.Count == 0)
+        {
+            return 0;
+        }
+
+        _dbContext.Users.RemoveRange(usersToRemove);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return usersToRemove.Count;
     }
 }

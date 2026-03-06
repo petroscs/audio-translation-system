@@ -130,6 +130,19 @@ services:
       - backend
     restart: unless-stopped
 
+  web-translator:
+    build:
+      context: ..
+      dockerfile: deployment/docker/web-translator/Dockerfile
+    container_name: audio-translation-web-translator
+    ports:
+      - "0.0.0.0:3002:3002"
+    networks:
+      - audio-translation-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
 volumes:
   db_data:
     driver: local

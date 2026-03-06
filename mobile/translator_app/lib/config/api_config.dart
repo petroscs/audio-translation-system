@@ -1,8 +1,18 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 class ApiConfig {
-  static const String apiBaseUrl = String.fromEnvironment(
+  static const String _envApiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://10.0.2.2:5000',
   );
+
+  /// API base URL. On web, the default is http://localhost:5000 when not set via --dart-define.
+  static String get apiBaseUrl {
+    if (kIsWeb && _envApiBaseUrl == 'http://10.0.2.2:5000') {
+      return 'http://localhost:5000';
+    }
+    return _envApiBaseUrl;
+  }
 
   /// Base URL for the web listener app (e.g. https://listener.example.com).
   /// Used when encoding the QR code so the QR always contains the full listen URL.

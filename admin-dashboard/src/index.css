@@ -31,6 +31,9 @@ input, select, textarea {
   margin: 0 auto;
   padding: 1rem;
 }
+.container--wide {
+  max-width: none;
+}
 
 .form-group {
   margin-bottom: 1rem;
@@ -93,13 +96,17 @@ input, select, textarea {
 
 .table-wrap {
   overflow-x: auto;
+  max-width: 100%;
   background: white;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  -webkit-overflow-scrolling: touch;
 }
-table {
-  width: 100%;
+.table-wrap table {
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
+  white-space: nowrap;
 }
 th, td {
   padding: 0.75rem 1rem;

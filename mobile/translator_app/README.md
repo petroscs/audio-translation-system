@@ -9,9 +9,25 @@ as a Translator session.
 - Start the backend (`Backend.Api`) locally.
 
 ## Configuration
-- Default API base URL: `http://10.0.2.2:5000`
-- Override with: `flutter run --dart-define=API_BASE_URL=http://<host>:5000`
+- Default API base URL: `http://10.0.2.2:5000` (mobile/desktop). On **web**, the default is `http://localhost:5000` when not set.
+- Override with: `flutter run --dart-define=API_BASE_URL=http://<host>:5000` or `flutter build web --dart-define=API_BASE_URL=https://<api-host>`.
 - **Listener QR URL:** The QR code shown while broadcasting always encodes the full web listener URL (e.g. `https://listener.example.com/listen/{sessionId}`). Default base URL is `http://localhost:3001`. For production or when the web listener is elsewhere, set: `flutter run --dart-define=LISTENER_WEB_BASE_URL=https://<listener-host>`.
+
+## Web
+The app can run in the browser as well as on mobile and desktop (same codebase).
+
+- **Enable web (once):** `flutter config --enable-web`
+- **Run in Chrome:**  
+  `flutter run -d chrome`  
+  Optionally: `flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:5000`
+- **Build for production:**  
+  `flutter build web --dart-define=API_BASE_URL=https://your-api-host`  
+  Output is in `build/web/` (static files). Serve with any static host (Nginx, Firebase Hosting, etc.).
+- **Production:** Set `API_BASE_URL` to your backend URL when building. Ensure the backend **CORS** configuration allows the translator web app origin (e.g. add it to `Cors:AllowedOrigins` in appsettings). WebRTC requires HTTPS (or localhost) in production.
+
+- **Docker Compose:** The deployment includes a `web-translator` service served over **HTTPS** (self-signed cert). After `docker compose up`, open **https://localhost:3002** or **https://&lt;server-IP&gt;:3002**; accept the browser certificate warning once, then the microphone prompt will work when you start broadcasting.
+
+  **Note:** `web-translator` is now a **React** web app (see `web-translator/`) and it proxies `/api` and `/ws` through nginx on port 3002, so it does **not** need a separate `API_URL` build-time setting. (The Flutter translator app in this folder is still usable for mobile/desktop, and can still be run in a browser via `flutter run -d chrome`, but it is no longer what Docker serves on port 3002.)
 
 ## Logs
 - **When you run from a terminal** (`flutter run -d windows` or `flutter run -d <device>`):  

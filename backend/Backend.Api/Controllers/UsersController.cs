@@ -105,6 +105,14 @@ public sealed class UsersController : ControllerBase
         }
     }
 
+    [HttpDelete("temporary")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<object>> DeleteTemporary(CancellationToken cancellationToken)
+    {
+        var deletedCount = await _userService.DeleteTemporaryUsersAsync(cancellationToken);
+        return Ok(new { deletedCount });
+    }
+
     private Guid? GetCurrentUserId()
     {
         var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
