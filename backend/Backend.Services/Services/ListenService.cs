@@ -70,7 +70,7 @@ public sealed class ListenService : IListenService
             .ToListAsync(cancellationToken);
 
         return sessions
-            .Select(s => new ActiveBroadcastItem(s.Id, s.Event.Name, s.Channel.Name))
+            .Select(s => new ActiveBroadcastItem(s.Id, s.Event.Name, s.Channel.Name, s.Channel.LanguageCode))
             .ToList();
     }
 

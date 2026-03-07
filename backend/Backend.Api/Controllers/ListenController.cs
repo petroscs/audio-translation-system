@@ -64,7 +64,8 @@ public sealed class ListenController : ControllerBase
         {
             BroadcastSessionId = i.BroadcastSessionId,
             EventName = i.EventName,
-            ChannelName = i.ChannelName
+            ChannelName = i.ChannelName,
+            LanguageCode = i.LanguageCode
         }).ToList();
         return Ok(response);
     }

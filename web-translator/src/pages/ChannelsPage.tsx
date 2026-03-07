@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import * as channelsApi from '../api/channels';
 import * as sessionsApi from '../api/sessions';
 import type { Channel, Session } from '../api/types';
+import { LanguageFlag } from '../components/LanguageFlag';
+import { getLanguageName } from '../utils/languages';
 
 export default function ChannelsPage() {
   const { eventId } = useParams<{ eventId: string }>();
@@ -88,7 +90,10 @@ export default function ChannelsPage() {
               <div className="row" style={{ justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ fontWeight: 800 }}>{c.name}</div>
-                  <div className="muted">{c.languageCode}</div>
+                  <div className="muted" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <LanguageFlag languageCode={c.languageCode} title={getLanguageName(c.languageCode)} />
+                    <span>{getLanguageName(c.languageCode) || c.languageCode}</span>
+                  </div>
                 </div>
                 <button
                   type="button"

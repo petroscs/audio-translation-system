@@ -4,6 +4,7 @@ export interface ActiveBroadcast {
   broadcastSessionId: string;
   eventName: string;
   channelName: string;
+  languageCode: string;
 }
 
 export type GetActiveBroadcastsResult =
@@ -22,11 +23,13 @@ export async function getActiveBroadcasts(): Promise<GetActiveBroadcastsResult> 
       broadcastSessionId?: string;
       eventName?: string;
       channelName?: string;
+      languageCode?: string;
     }>;
     const broadcasts = (Array.isArray(data) ? data : []).map((b) => ({
       broadcastSessionId: String(b?.broadcastSessionId ?? ''),
       eventName: String(b?.eventName ?? ''),
       channelName: String(b?.channelName ?? ''),
+      languageCode: String(b?.languageCode ?? ''),
     }));
     return { ok: true, broadcasts };
   } catch (e) {

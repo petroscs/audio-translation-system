@@ -124,7 +124,35 @@ textarea {
   color: #94a3b8;
 }
 
-/* Print: show only the QR card */
+/* Print QR area: on screen */
+.print-qr-caption {
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.print-qr-subtitle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 1rem;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+.print-qr-subtitle-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.print-qr-code {
+  display: flex;
+  justify-content: flex-start;
+}
+.print-qr-code svg {
+  width: 160px;
+  height: 160px;
+}
+
+/* Print: only the QR card, centered and enlarged */
 @media print {
   body * {
     visibility: hidden;
@@ -138,15 +166,45 @@ textarea {
     left: 0;
     top: 0;
     width: 100%;
-    padding: 1.5rem;
+    min-height: 100%;
+    padding: 0;
+    margin: 0;
     background: #fff;
     color: #111;
     border: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none;
   }
-  .print-qr-area .muted {
-    color: #555;
+  .print-qr-caption {
+    font-size: 1.75rem;
+    font-weight: 800;
+    margin-bottom: 1.25rem;
+    text-align: center;
   }
-  .print-qr-area .btn {
-    display: none;
+  .print-qr-subtitle {
+    color: #333;
+    font-size: 1.15rem;
+    margin-bottom: 3rem;
+    justify-content: center;
+  }
+  .print-qr-subtitle-block {
+    gap: 0.5rem;
+  }
+  .print-qr-subtitle svg {
+    width: 112px !important;
+    height: 76px !important;
+  }
+  .print-qr-code {
+    justify-content: center;
+  }
+  .print-qr-code svg {
+    width: 320px !important;
+    height: 320px !important;
+  }
+  .print-qr-btn {
+    display: none !important;
   }
 }

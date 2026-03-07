@@ -4,6 +4,7 @@ import type { Channel, CreateChannelRequest, UpdateChannelRequest } from '../api
 import * as channelsApi from '../api/channels';
 import * as eventsApi from '../api/events';
 import type { Event } from '../api/types';
+import { getLanguageDisplay, getLanguageName } from '../utils/languages';
 
 export default function EventChannels() {
   const { eventId } = useParams<{ eventId: string }>();
@@ -105,7 +106,7 @@ export default function EventChannels() {
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Language code</th>
+                <th>Language</th>
                 <th>Created</th>
                 <th style={{ width: 140 }}>Actions</th>
               </tr>
@@ -114,7 +115,7 @@ export default function EventChannels() {
               {list.map((c) => (
                 <tr key={c.id}>
                   <td>{c.name}</td>
-                  <td>{c.languageCode}</td>
+                  <td>{getLanguageDisplay(c.languageCode)}</td>
                   <td>{new Date(c.createdAt).toLocaleDateString()}</td>
                   <td>
                     <button
@@ -216,6 +217,11 @@ function ChannelForm({
         <div className="form-group">
           <label>Language code</label>
           <input value={languageCode} onChange={(e) => setLanguageCode(e.target.value)} required maxLength={20} />
+          {languageCode.trim() && (
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.875rem', color: '#64748b' }}>
+              → {getLanguageName(languageCode) || '(unknown code)'}
+            </p>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="btn btn-secondary" onClick={onCancel}>

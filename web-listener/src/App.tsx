@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useSearchParams, useNavigate } from 'react-router-dom';
 import { getActiveBroadcasts, type ActiveBroadcast } from './api/listen';
+import { getLanguageName } from './utils/languages';
+import { LanguageFlag } from './components/LanguageFlag';
 import Listen from './pages/Listen';
 
 const listenPageStyles: Record<string, React.CSSProperties> = {
@@ -155,6 +157,16 @@ function ListenPage() {
                   {b.eventName || 'Untitled event'} · {b.channelName || 'Untitled channel'}
                 </p>
                 <p style={listenPageStyles.cardMeta}>
+                  {b.languageCode && (
+                    <>
+                      <LanguageFlag
+                        languageCode={b.languageCode}
+                        title={getLanguageName(b.languageCode)}
+                        style={{ marginRight: 6 }}
+                      />
+                      {getLanguageName(b.languageCode)} ·{' '}
+                    </>
+                  )}
                   Click to start listening
                 </p>
               </button>

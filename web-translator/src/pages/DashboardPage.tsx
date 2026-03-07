@@ -3,12 +3,18 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { getListenerBaseUrl } from '../api/config';
 import * as sessionsApi from '../api/sessions';
+import * as eventsApi from '../api/events';
+import * as channelsApi from '../api/channels';
 import { getAccessToken } from '../api/tokens';
 import type { Session } from '../api/types';
+import type { Event } from '../api/types';
+import type { Channel } from '../api/types';
 import { SignalingClient } from '../signaling/signaling';
 import { connectSendTransport, startAudioCapture, type WebRtcBroadcastConnection } from '../webrtc/webrtcBroadcaster';
 import { useAudioLevel } from '../webrtc/useAudioLevel';
 import { isAdminToken } from '../utils/jwt';
+import { LanguageFlag } from '../components/LanguageFlag';
+import { getLanguageName } from '../utils/languages';
 
 type Status = 'idle' | 'connecting' | 'broadcasting' | 'error';
 
@@ -17,6 +23,8 @@ export default function DashboardPage() {
   const navigate = useNavigate();
 
   const [session, setSession] = useState<Session | null>(null);
+  const [event, setEvent] = useState<Event | null>(null);
+  const [channel, setChannel] = useState<Channel | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
   const [producerId, setProducerId] = useState<string | null>(null);
@@ -43,10 +51,37 @@ export default function DashboardPage() {
     sessionsApi
       .getSession(sessionId)
       .then((res) => {
-        if (res.ok) setSession(res.data);
+        if (res.ok && res.data) {
+          setSession(res.data);
+        }
       })
       .catch(() => {});
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!session) {
+      setEvent(null);
+      setChannel(null);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      eventsApi.getEvent(session.eventId),
+      channelsApi.getChannel(session.channelId),
+    ]).then(([eventRes, channelRes]) => {
+      if (cancelled) return;
+      if (eventRes.ok && eventRes.data) setEvent(eventRes.data);
+      else setEvent(null);
+      if (channelRes.ok && channelRes.data) setChannel(channelRes.data);
+      else setChannel(null);
+    }).catch(() => {
+      if (!cancelled) {
+        setEvent(null);
+        setChannel(null);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [session]);
 
   async function startBroadcast() {
     if (!sessionId) return;
@@ -186,8 +221,22 @@ export default function DashboardPage() {
           <div className="muted">Session</div>
           <div style={{ fontFamily: 'monospace' }}>{sessionId}</div>
           {session && (
-            <div className="muted" style={{ marginTop: 6 }}>
-              {session.status} · event {session.eventId} · channel {session.channelId}
+            <div style={{ marginTop: 6 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                {event?.name ?? session.eventId}
+                {' · '}
+                {channel ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <LanguageFlag languageCode={channel.languageCode} title={getLanguageName(channel.languageCode)} />
+                    {channel.name}
+                  </span>
+                ) : (
+                  session.channelId
+                )}
+              </div>
+              <div className="muted">
+                {session.status} · event {session.eventId} · channel {session.channelId}
+              </div>
             </div>
           )}
         </div>
@@ -247,19 +296,22 @@ export default function DashboardPage() {
       </div>
 
       <div className="card print-qr-area">
-        <div style={{ fontWeight: 800, marginBottom: 8 }}>Listeners: scan to join</div>
-        <div className="row" style={{ alignItems: 'flex-start' }}>
-          <QRCodeSVG value={listenUrl} size={160} level="M" />
-          <div style={{ flex: 1, minWidth: 280 }}>
-            <div className="muted" style={{ marginBottom: 6 }}>
-              Link
-            </div>
-            <div style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{listenUrl}</div>
-          </div>
+        <div className="print-qr-caption">{event?.name ?? 'Listen'}</div>
+        <div className="print-qr-subtitle">
+          {channel && (
+            <span className="print-qr-subtitle-block">
+              <LanguageFlag languageCode={channel.languageCode} title={getLanguageName(channel.languageCode)} />
+              <span>{channel.name}</span>
+            </span>
+          )}
+          {!channel && session && <span>Channel {session.channelId}</span>}
+        </div>
+        <div className="print-qr-code">
+          <QRCodeSVG value={listenUrl} size={320} level="M" />
         </div>
         <button
           type="button"
-          className="btn btn-secondary"
+          className="btn btn-secondary print-qr-btn"
           style={{ marginTop: '1rem' }}
           onClick={() => window.print()}
         >
